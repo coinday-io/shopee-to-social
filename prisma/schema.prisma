@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Settings {
+  id                String   @id @default(cuid())
+  replizApiKey      String?
+  openaiKey         String?
+  openrouterKey     String?
+  claudeKey         String?
+  defaultAiProvider String   @default("openai")
+  defaultAiModel    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model PostHistory {
+  id               String   @id @default(cuid())
+  productItemid    String
+  productName      String
+  productUrl       String
+  affiliateUrl     String
+  caption          String
+  imageUrl         String
+  platform         String
+  accountId        String
+  accountName      String
+  replizScheduleId String?
+  scheduleAt       DateTime
+  status           String   @default("pending")
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  @@index([status])
+  @@index([scheduleAt])
+}
