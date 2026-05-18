@@ -35,7 +35,7 @@ Buka [http://localhost:3000](http://localhost:3000) — akan redirect ke `/produ
 ### 4. Konfigurasi API keys
 
 Buka **/settings** dan isi:
-- **Repliz API key** — tekan "Test & Load Accounts" untuk verifikasi
+- **Repliz Access Key + Secret Key** (HTTP Basic auth) — tekan "Test & Load Accounts" untuk verifikasi
 - Minimal salah satu dari OpenAI / OpenRouter / Claude API key
 - Pilih default AI provider + model
 
@@ -78,7 +78,7 @@ src/
 
 ## Catatan
 
-- **Repliz header auth** — saat ini pakai `x-api-key`. Kalau Repliz pakai header berbeda, edit `src/lib/repliz.ts`.
+- **Repliz auth** — HTTP Basic, `base64(accessKey:secretKey)`, sesuai docs di https://api.repliz.com/public.
 - **Shopee price** dalam satuan **sen** (dibagi 100 untuk Rupiah) — sudah dihandle di `formatRupiah()`.
 - **Image URL Shopee** (`*.susercontent.com`) bisa langsung dipakai sebagai media di Repliz.
 - **Multi-account posting** pakai `Promise.allSettled` — satu akun gagal tidak menghentikan yang lain. History tersimpan per-akun dengan status `pending` / `success` / `error`.

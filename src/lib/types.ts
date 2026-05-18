@@ -60,7 +60,7 @@ export interface ReplizSchedulePayload {
   type: 'image' | 'album' | 'text' | 'link';
   medias: {
     alt: string;
-    type: 'image' | 'video';
+    type: 0 | 1; // 0 = image, 1 = video
     thumbnail: string;
     url: string;
     customThumbnail: boolean;
@@ -80,7 +80,8 @@ export interface ReplizSchedulePayload {
 export type AiProvider = 'openai' | 'openrouter' | 'claude';
 
 export interface AppSettings {
-  replizApiKey: string | null;
+  replizAccessKey: string | null;
+  replizSecretKey: string | null;
   openaiKey: string | null;
   openrouterKey: string | null;
   claudeKey: string | null;

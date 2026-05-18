@@ -2,16 +2,17 @@ import { ReplizAccount, ReplizSchedulePayload } from './types';
 
 export class ReplizClient {
   private baseUrl = 'https://api.repliz.com';
-  private apiKey: string;
+  private authHeader: string;
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor(accessKey: string, secretKey: string) {
+    const token = Buffer.from(`${accessKey}:${secretKey}`).toString('base64');
+    this.authHeader = `Basic ${token}`;
   }
 
   private get headers(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'x-api-key': this.apiKey,
+      Authorization: this.authHeader,
     };
   }
 
@@ -52,6 +53,9 @@ export class ReplizClient {
   }
 }
 
+// Repliz ScheduleMedia.type enum: 0 = image, 1 = video
+export const ReplizMediaType = { Image: 0, Video: 1 } as const;
+
 export function buildReplizPayload(
   product: { name: string; description: string; url: string },
   affiliateUrl: string,
@@ -68,7 +72,7 @@ export function buildReplizPayload(
     medias: [
       {
         alt: product.name,
-        type: 'image',
+        type: ReplizMediaType.Image,
         thumbnail: imageUrl,
         url: imageUrl,
         customThumbnail: false,

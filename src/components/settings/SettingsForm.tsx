@@ -23,7 +23,8 @@ export function SettingsForm() {
   const [settings, setSettings] = React.useState<AppSettings | null>(null);
   const [accounts, setAccounts] = React.useState<ReplizAccount[] | null>(null);
 
-  const [replizKey, setReplizKey] = React.useState('');
+  const [replizAccessKey, setReplizAccessKey] = React.useState('');
+  const [replizSecretKey, setReplizSecretKey] = React.useState('');
   const [openaiKey, setOpenaiKey] = React.useState('');
   const [openrouterKey, setOpenrouterKey] = React.useState('');
   const [claudeKey, setClaudeKey] = React.useState('');
@@ -36,7 +37,8 @@ export function SettingsForm() {
         const res = await fetch('/api/settings');
         const data: AppSettings = await res.json();
         setSettings(data);
-        setReplizKey(data.replizApiKey ?? '');
+        setReplizAccessKey(data.replizAccessKey ?? '');
+        setReplizSecretKey(data.replizSecretKey ?? '');
         setOpenaiKey(data.openaiKey ?? '');
         setOpenrouterKey(data.openrouterKey ?? '');
         setClaudeKey(data.claudeKey ?? '');
@@ -57,7 +59,8 @@ export function SettingsForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          replizApiKey: replizKey,
+          replizAccessKey,
+          replizSecretKey,
           openaiKey,
           openrouterKey,
           claudeKey,
@@ -77,16 +80,21 @@ export function SettingsForm() {
   }
 
   async function testRepliz() {
+    if (!replizAccessKey || !replizSecretKey) {
+      return toast.error('Isi Access Key dan Secret Key dulu');
+    }
     setTesting(true);
     setAccounts(null);
     try {
-      if (replizKey && !replizKey.includes('...')) {
-        await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ replizApiKey: replizKey }),
-        });
-      }
+      // Save credentials first (skip masked secret)
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          replizAccessKey,
+          replizSecretKey,
+        }),
+      });
       const res = await fetch('/api/repliz/accounts');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Gagal');
@@ -118,39 +126,53 @@ export function SettingsForm() {
       <section className="rounded-xl border border-border bg-white p-6">
         <h2 className="text-base font-semibold mb-1">Repliz API</h2>
         <p className="text-sm text-neutral-500 mb-4">
-          API key untuk posting ke media sosial via Repliz.
+          Auth pakai HTTP Basic. Dapatkan Access Key + Secret Key dari{' '}
+          <a
+            href="https://app.repliz.com/developer"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            Repliz developer settings
+          </a>
+          .
         </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input
-            label="API Key"
+            label="Access Key"
             type="text"
-            value={replizKey}
-            placeholder="Masukkan Repliz API key"
-            onChange={(e) => setReplizKey(e.target.value)}
+            value={replizAccessKey}
+            placeholder="0160995268"
+            onChange={(e) => setReplizAccessKey(e.target.value)}
           />
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={testRepliz} loading={testing}>
-              Test & Load Accounts
-            </Button>
-            {settings?.hasReplizKey && (
-              <Badge tone="success">Tersimpan</Badge>
-            )}
-          </div>
-          {accounts && (
-            <div className="mt-3 rounded-lg bg-neutral-50 p-4">
-              <div className="text-sm font-medium mb-2">
-                {accounts.length} akun terkoneksi
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(platformCounts).map(([type, count]) => (
-                  <Badge key={type} tone="info">
-                    {platformLabel(type)}: {count}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
+          <Input
+            label="Secret Key"
+            type="password"
+            value={replizSecretKey}
+            placeholder="cvIKL4uxjSlrmbtOT9OjeST2AXcVI1N7"
+            onChange={(e) => setReplizSecretKey(e.target.value)}
+          />
         </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Button variant="secondary" onClick={testRepliz} loading={testing}>
+            Test & Load Accounts
+          </Button>
+          {settings?.hasReplizKey && <Badge tone="success">Tersimpan</Badge>}
+        </div>
+        {accounts && (
+          <div className="mt-3 rounded-lg bg-neutral-50 p-4">
+            <div className="text-sm font-medium mb-2">
+              {accounts.length} akun terkoneksi
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(platformCounts).map(([type, count]) => (
+                <Badge key={type} tone="info">
+                  {platformLabel(type)}: {count}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* AI Providers */}

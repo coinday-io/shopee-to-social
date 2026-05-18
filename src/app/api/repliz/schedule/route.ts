@@ -10,12 +10,15 @@ export async function GET(req: Request) {
   const limit = parseInt(searchParams.get('limit') ?? '20', 10);
 
   const settings = await prisma.settings.findFirst();
-  if (!settings?.replizApiKey) {
-    return NextResponse.json({ error: 'Repliz API key belum diset' }, { status: 400 });
+  if (!settings?.replizAccessKey || !settings?.replizSecretKey) {
+    return NextResponse.json(
+      { error: 'Repliz Access Key & Secret Key belum diset' },
+      { status: 400 },
+    );
   }
 
   try {
-    const client = new ReplizClient(settings.replizApiKey);
+    const client = new ReplizClient(settings.replizAccessKey, settings.replizSecretKey);
     const data = await client.getSchedules(page, limit);
     return NextResponse.json(data);
   } catch (err) {

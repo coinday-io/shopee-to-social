@@ -5,14 +5,16 @@ export const dynamic = 'force-dynamic';
 
 function mask(key: string | null | undefined, prefix = ''): string | null {
   if (!key) return null;
-  return `${prefix}...${key.slice(-4)}`;
+  const tail = key.length > 4 ? key.slice(-4) : key;
+  return `${prefix}...${tail}`;
 }
 
 export async function GET() {
   const settings = await prisma.settings.findFirst();
   if (!settings) {
     return NextResponse.json({
-      replizApiKey: null,
+      replizAccessKey: null,
+      replizSecretKey: null,
       openaiKey: null,
       openrouterKey: null,
       claudeKey: null,
@@ -25,13 +27,14 @@ export async function GET() {
     });
   }
   return NextResponse.json({
-    replizApiKey: mask(settings.replizApiKey),
+    replizAccessKey: settings.replizAccessKey, // access key is not secret, show full
+    replizSecretKey: mask(settings.replizSecretKey),
     openaiKey: mask(settings.openaiKey, 'sk-'),
     openrouterKey: mask(settings.openrouterKey, 'sk-or-'),
     claudeKey: mask(settings.claudeKey, 'sk-ant-'),
     defaultAiProvider: settings.defaultAiProvider,
     defaultAiModel: settings.defaultAiModel,
-    hasReplizKey: !!settings.replizApiKey,
+    hasReplizKey: !!(settings.replizAccessKey && settings.replizSecretKey),
     hasOpenaiKey: !!settings.openaiKey,
     hasOpenrouterKey: !!settings.openrouterKey,
     hasClaudeKey: !!settings.claudeKey,
@@ -43,15 +46,21 @@ export async function POST(req: Request) {
   const existing = await prisma.settings.findFirst();
 
   const updateData: Record<string, string | null> = {};
-  const secretFields = ['replizApiKey', 'openaiKey', 'openrouterKey', 'claudeKey'];
+  const secretFields = ['replizSecretKey', 'openaiKey', 'openrouterKey', 'claudeKey'];
+  const plainSecretFields = ['replizAccessKey']; // access key is not masked
   const plainFields = ['defaultAiProvider', 'defaultAiModel'];
 
   for (const field of secretFields) {
     const value = body[field];
     if (value === undefined) continue;
-    // Skip masked values (containing "...")
+    // Skip masked placeholders (containing "...")
     if (typeof value === 'string' && value.includes('...')) continue;
     updateData[field] = value === '' ? null : value;
+  }
+  for (const field of plainSecretFields) {
+    if (body[field] !== undefined) {
+      updateData[field] = body[field] === '' ? null : body[field];
+    }
   }
   for (const field of plainFields) {
     if (body[field] !== undefined) updateData[field] = body[field];

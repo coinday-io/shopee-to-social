@@ -25,11 +25,14 @@ export async function POST(req: Request) {
   }
 
   const settings = await prisma.settings.findFirst();
-  if (!settings?.replizApiKey) {
-    return NextResponse.json({ error: 'Repliz API key belum diset' }, { status: 400 });
+  if (!settings?.replizAccessKey || !settings?.replizSecretKey) {
+    return NextResponse.json(
+      { error: 'Repliz Access Key & Secret Key belum diset' },
+      { status: 400 },
+    );
   }
 
-  const client = new ReplizClient(settings.replizApiKey);
+  const client = new ReplizClient(settings.replizAccessKey, settings.replizSecretKey);
   type Result = { accountId: string; success: boolean; scheduleId?: string; error?: string };
   const results: Result[] = [];
 
