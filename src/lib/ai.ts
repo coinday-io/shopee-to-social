@@ -9,16 +9,22 @@ interface CaptionInput {
   model?: string;
 }
 
-const CAPTION_SYSTEM_PROMPT = `Kamu adalah copywriter media sosial yang ahli dalam membuat caption produk yang engaging untuk pasar Indonesia.
-Tugasmu membuat caption singkat, menarik, dan mendorong pembelian.
-Selalu gunakan bahasa Indonesia yang natural dan friendly.
-Sertakan emoji yang relevan.
-Akhiri dengan hashtag yang relevan (5-10 hashtag).
-Caption maksimal 300 karakter (tidak termasuk hashtag).
-Format output:
-[caption]
+const CAPTION_SYSTEM_PROMPT = `Kamu adalah copywriter media sosial ahli untuk pasar Indonesia.
+Tugasmu: buat SATU caption produk yang singkat, engaging, dan mendorong pembelian.
 
-[hashtag]`;
+ATURAN OUTPUT (penting):
+- Output kamu adalah caption final yang siap di-copy-paste ke post. Nothing else.
+- Jangan tulis label apapun seperti "Caption:", "Hashtag:", "[caption]", "[hashtag]", "Versi 1", "Untuk Facebook", dst.
+- Jangan buat dua versi (untuk platform berbeda). Satu caption universal saja.
+- Jangan ulang nama produk di awal caption (langsung ke value proposition).
+
+GAYA:
+- Bahasa Indonesia natural dan friendly.
+- 2-4 emoji relevan.
+- Maksimal ~280 karakter sebelum hashtag.
+- Sebutkan harga kalau relevan.
+- Akhiri dengan 5-10 hashtag relevan di baris terakhir (dipisah spasi).
+- Sertakan link affiliate dalam caption (kalau hint dari user tidak memberi format khusus, taruh sebelum hashtag).`;
 
 function buildUserPrompt(input: CaptionInput): string {
   const { product, affiliateUrl, hint } = input;
@@ -34,11 +40,9 @@ Harga: ${price}
 Kategori: ${product.categories?.join(' > ') ?? '-'}
 Toko: ${product.shop_name} (${product.shop_location})
 Deskripsi singkat: ${(product.description ?? '').substring(0, 300)}
-Link: ${affiliateUrl || product.url}
+Link affiliate: ${affiliateUrl || product.url}
 
-${hint ? `Instruksi tambahan dari user: ${hint}` : ''}
-
-Buat caption untuk Facebook dan Threads.`;
+${hint ? `Instruksi tambahan dari user: ${hint}` : ''}`;
 }
 
 async function generateWithOpenAI(prompt: string, apiKey: string, model = 'gpt-4o-mini') {
@@ -103,16 +107,43 @@ async function generateWithClaude(prompt: string, apiKey: string, model = 'claud
   return (data.content?.[0]?.text ?? '').trim();
 }
 
+/**
+ * Strip AI artifacts that occasionally leak into the output:
+ * - literal placeholder tokens like "[caption]" / "[hashtag]" on their own line
+ * - leading labels like "Caption:" / "Hashtag:" / "Versi 1:"
+ * - leading/trailing whitespace and excessive blank lines
+ */
+function sanitizeCaption(raw: string): string {
+  let text = raw.trim();
+  // Strip surrounding triple-backtick fences if model wrapped in code block
+  text = text.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '');
+  // Drop standalone placeholder lines
+  text = text
+    .split('\n')
+    .filter((line) => !/^\s*\[(caption|hashtag|tags?)\]\s*$/i.test(line))
+    .join('\n');
+  // Remove leading labels at start of caption
+  text = text.replace(/^\s*(caption|hashtag|tags?|versi\s*\d+|untuk\s+\w+)\s*[:\-]\s*/i, '');
+  // Collapse 3+ consecutive newlines down to 2
+  text = text.replace(/\n{3,}/g, '\n\n');
+  return text.trim();
+}
+
 export async function generateCaption(input: CaptionInput): Promise<string> {
   const prompt = buildUserPrompt(input);
+  let raw: string;
   switch (input.provider) {
     case 'openai':
-      return generateWithOpenAI(prompt, input.apiKey, input.model);
+      raw = await generateWithOpenAI(prompt, input.apiKey, input.model);
+      break;
     case 'openrouter':
-      return generateWithOpenRouter(prompt, input.apiKey, input.model);
+      raw = await generateWithOpenRouter(prompt, input.apiKey, input.model);
+      break;
     case 'claude':
-      return generateWithClaude(prompt, input.apiKey, input.model);
+      raw = await generateWithClaude(prompt, input.apiKey, input.model);
+      break;
     default:
       throw new Error(`Unknown AI provider: ${input.provider}`);
   }
+  return sanitizeCaption(raw);
 }

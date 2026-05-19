@@ -124,9 +124,12 @@ export function buildReplizPayload(input: BuildPayloadInput): ReplizSchedulePayl
   // text and link → medias stays empty array
 
   return {
-    title: product.name.substring(0, 100),
+    // title & topic are required by Repliz but show up prominently on
+    // some platforms (FB/Threads prepend title to post body). Keep them
+    // empty so the caption is the only visible text.
+    title: '',
     description: caption,
-    topic: 'Shopee Product',
+    topic: '',
     type: mode,
     medias,
     meta: {
