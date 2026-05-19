@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { AppSettings, ReplizAccount } from '@/lib/types';
 import { platformLabel } from '@/lib/utils';
+import { fetchJson } from '@/lib/fetch-client';
 
 const defaultModelByProvider: Record<string, string> = {
   openai: 'gpt-4o-mini',
@@ -34,8 +35,7 @@ export function SettingsForm() {
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/settings');
-        const data: AppSettings = await res.json();
+        const data = await fetchJson<AppSettings>('/api/settings');
         setSettings(data);
         setReplizAccessKey(data.replizAccessKey ?? '');
         setReplizSecretKey(data.replizSecretKey ?? '');
@@ -44,8 +44,8 @@ export function SettingsForm() {
         setClaudeKey(data.claudeKey ?? '');
         setProvider((data.defaultAiProvider as 'openai' | 'openrouter' | 'claude') ?? 'openai');
         setModel(data.defaultAiModel ?? '');
-      } catch {
-        toast.error('Gagal memuat settings');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Gagal memuat settings');
       } finally {
         setLoading(false);
       }
@@ -55,7 +55,7 @@ export function SettingsForm() {
   async function saveAll() {
     setSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      await fetchJson('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,9 +68,8 @@ export function SettingsForm() {
           defaultAiModel: model || defaultModelByProvider[provider],
         }),
       });
-      if (!res.ok) throw new Error('Save failed');
       toast.success('Settings tersimpan');
-      const fresh: AppSettings = await (await fetch('/api/settings')).json();
+      const fresh = await fetchJson<AppSettings>('/api/settings');
       setSettings(fresh);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Gagal menyimpan');
@@ -86,18 +85,12 @@ export function SettingsForm() {
     setTesting(true);
     setAccounts(null);
     try {
-      // Save credentials first (skip masked secret)
-      await fetch('/api/settings', {
+      await fetchJson('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          replizAccessKey,
-          replizSecretKey,
-        }),
+        body: JSON.stringify({ replizAccessKey, replizSecretKey }),
       });
-      const res = await fetch('/api/repliz/accounts');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Gagal');
+      const data = await fetchJson<ReplizAccount[]>('/api/repliz/accounts');
       setAccounts(data);
       toast.success(`${data.length} akun terkoneksi`);
     } catch (err) {

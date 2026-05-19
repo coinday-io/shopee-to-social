@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ReplizClient, buildReplizPayload } from '@/lib/repliz';
 import { ReplizAccount } from '@/lib/types';
+import { jsonHandler } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -16,7 +17,7 @@ type PostRequest = {
   scheduleAt: string;
 };
 
-export async function POST(req: Request) {
+export const POST = jsonHandler(async (req: Request) => {
   const body = (await req.json()) as PostRequest;
   const { product, affiliateUrl, imageUrl, caption, accountIds, accounts, scheduleAt } = body;
 
@@ -97,4 +98,4 @@ export async function POST(req: Request) {
     failCount: results.length - successCount,
     results,
   });
-}
+});

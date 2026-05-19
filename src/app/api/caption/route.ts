@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateCaption } from '@/lib/ai';
 import { AiProvider } from '@/lib/types';
+import { jsonHandler } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-export async function POST(req: Request) {
+export const POST = jsonHandler(async (req: Request) => {
   const { product, affiliateUrl, hint } = await req.json();
 
   if (!product) {
@@ -33,18 +34,13 @@ export async function POST(req: Request) {
     );
   }
 
-  try {
-    const caption = await generateCaption({
-      product,
-      affiliateUrl: affiliateUrl ?? '',
-      hint: hint ?? '',
-      provider,
-      apiKey,
-      model: settings.defaultAiModel ?? undefined,
-    });
-    return NextResponse.json({ caption });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
+  const caption = await generateCaption({
+    product,
+    affiliateUrl: affiliateUrl ?? '',
+    hint: hint ?? '',
+    provider,
+    apiKey,
+    model: settings.defaultAiModel ?? undefined,
+  });
+  return NextResponse.json({ caption });
+});

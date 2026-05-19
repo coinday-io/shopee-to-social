@@ -5,10 +5,10 @@ import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { ReplizAccount, ShopeeProduct, SocialPlatform } from '@/lib/types';
 import { cn, formatRupiah, platformColor, platformLabel } from '@/lib/utils';
+import { fetchJson } from '@/lib/fetch-client';
 
 interface PostFormModalProps {
   open: boolean;
@@ -61,12 +61,8 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
   React.useEffect(() => {
     if (!open) return;
     setAccountsLoading(true);
-    fetch('/api/repliz/accounts')
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Gagal load akun');
-        setAccounts(data);
-      })
+    fetchJson<ReplizAccount[]>('/api/repliz/accounts')
+      .then(setAccounts)
       .catch((err: Error) => {
         toast.error(err.message);
         setAccounts([]);
@@ -97,13 +93,11 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
     if (!product) return;
     setGenerating(true);
     try {
-      const res = await fetch('/api/caption', {
+      const data = await fetchJson<{ caption: string }>('/api/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product, affiliateUrl, hint: captionHint }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Generate gagal');
       setCaption(data.caption);
       toast.success('Caption dibuat');
     } catch (err) {
@@ -127,26 +121,27 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: {
-            itemid: product.itemid,
-            name: product.name,
-            description: product.description,
-            url: product.url,
-          },
-          affiliateUrl,
-          imageUrl: selectedImageUrl,
-          caption,
-          accountIds: selectedAccountIds,
-          accounts: accounts ?? [],
-          scheduleAt: scheduleDate.toISOString(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Post gagal');
+      const data = await fetchJson<{ successCount: number; failCount: number }>(
+        '/api/post',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: {
+              itemid: product.itemid,
+              name: product.name,
+              description: product.description,
+              url: product.url,
+            },
+            affiliateUrl,
+            imageUrl: selectedImageUrl,
+            caption,
+            accountIds: selectedAccountIds,
+            accounts: accounts ?? [],
+            scheduleAt: scheduleDate.toISOString(),
+          }),
+        },
+      );
       const { successCount, failCount } = data;
       if (failCount === 0) {
         toast.success(`${successCount} jadwal berhasil dibuat`);

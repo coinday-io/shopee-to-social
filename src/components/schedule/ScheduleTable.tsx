@@ -7,7 +7,8 @@ import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { ScheduleStatusBadge } from './ScheduleStatusBadge';
-import { platformColor, platformLabel, truncate } from '@/lib/utils';
+import { platformColor, truncate } from '@/lib/utils';
+import { fetchJson } from '@/lib/fetch-client';
 
 interface HistoryItem {
   id: string;
@@ -53,11 +54,10 @@ export function ScheduleTable() {
     if (from) params.set('from', new Date(from).toISOString());
     if (to) params.set('to', new Date(to).toISOString());
     try {
-      const res = await fetch(`/api/history?${params}`);
-      const json = await res.json();
+      const json = await fetchJson<ApiResponse>(`/api/history?${params}`);
       setData(json);
-    } catch {
-      toast.error('Gagal memuat data');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Gagal memuat data');
     } finally {
       setLoading(false);
     }

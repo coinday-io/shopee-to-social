@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { jsonHandler } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,7 @@ function mask(key: string | null | undefined, prefix = ''): string | null {
   return `${prefix}...${tail}`;
 }
 
-export async function GET() {
+export const GET = jsonHandler(async () => {
   const settings = await prisma.settings.findFirst();
   if (!settings) {
     return NextResponse.json({
@@ -27,7 +28,7 @@ export async function GET() {
     });
   }
   return NextResponse.json({
-    replizAccessKey: settings.replizAccessKey, // access key is not secret, show full
+    replizAccessKey: settings.replizAccessKey,
     replizSecretKey: mask(settings.replizSecretKey),
     openaiKey: mask(settings.openaiKey, 'sk-'),
     openrouterKey: mask(settings.openrouterKey, 'sk-or-'),
@@ -39,21 +40,20 @@ export async function GET() {
     hasOpenrouterKey: !!settings.openrouterKey,
     hasClaudeKey: !!settings.claudeKey,
   });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = jsonHandler(async (req: Request) => {
   const body = await req.json();
   const existing = await prisma.settings.findFirst();
 
   const updateData: Record<string, string | null> = {};
   const secretFields = ['replizSecretKey', 'openaiKey', 'openrouterKey', 'claudeKey'];
-  const plainSecretFields = ['replizAccessKey']; // access key is not masked
+  const plainSecretFields = ['replizAccessKey'];
   const plainFields = ['defaultAiProvider', 'defaultAiModel'];
 
   for (const field of secretFields) {
     const value = body[field];
     if (value === undefined) continue;
-    // Skip masked placeholders (containing "...")
     if (typeof value === 'string' && value.includes('...')) continue;
     updateData[field] = value === '' ? null : value;
   }
@@ -73,4 +73,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});

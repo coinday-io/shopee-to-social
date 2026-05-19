@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { jsonHandler } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export const GET = jsonHandler(async (req: Request) => {
   const { searchParams } = new URL(req.url);
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const limit = parseInt(searchParams.get('limit') ?? '20', 10);
@@ -39,4 +40,4 @@ export async function GET(req: Request) {
     limit,
     pageCount: Math.ceil(total / limit),
   });
-}
+});
