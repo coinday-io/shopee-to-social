@@ -8,10 +8,18 @@ import { ProductCard } from './ProductCard';
 interface ProductGridProps {
   products: ShopeeProduct[];
   postedItemIds: Set<string>;
+  selectedItemIds: Set<string>;
+  onToggleSelect: (product: ShopeeProduct) => void;
   onCreatePost: (product: ShopeeProduct) => void;
 }
 
-export function ProductGrid({ products, postedItemIds, onCreatePost }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  postedItemIds,
+  selectedItemIds,
+  onToggleSelect,
+  onCreatePost,
+}: ProductGridProps) {
   const [search, setSearch] = React.useState('');
   const [category, setCategory] = React.useState('');
 
@@ -63,8 +71,30 @@ export function ProductGrid({ products, postedItemIds, onCreatePost }: ProductGr
         </div>
       </div>
 
-      <div className="mt-3 text-sm text-neutral-500">
-        Menampilkan {filtered.length} dari {products.length} produk
+      <div className="mt-3 flex items-center justify-between text-sm text-neutral-500">
+        <span>
+          Menampilkan {filtered.length} dari {products.length} produk
+          {selectedItemIds.size > 0 && (
+            <span className="ml-2 font-medium text-primary">
+              · {selectedItemIds.size} dipilih
+            </span>
+          )}
+        </span>
+        <button
+          onClick={() => {
+            const allSelected = filtered.every((p) => selectedItemIds.has(String(p.itemid)));
+            // Only toggle items whose current state differs from desired state
+            filtered.forEach((p) => {
+              const isSel = selectedItemIds.has(String(p.itemid));
+              if (allSelected ? isSel : !isSel) onToggleSelect(p);
+            });
+          }}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          {filtered.every((p) => selectedItemIds.has(String(p.itemid)))
+            ? 'Deselect semua yang tampil'
+            : 'Pilih semua yang tampil'}
+        </button>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -73,6 +103,8 @@ export function ProductGrid({ products, postedItemIds, onCreatePost }: ProductGr
             key={p.itemid}
             product={p}
             alreadyPosted={postedItemIds.has(String(p.itemid))}
+            selected={selectedItemIds.has(String(p.itemid))}
+            onToggleSelect={onToggleSelect}
             onCreatePost={onCreatePost}
           />
         ))}

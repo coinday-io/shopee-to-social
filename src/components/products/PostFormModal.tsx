@@ -56,6 +56,7 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
   const [affiliateUrl, setAffiliateUrl] = React.useState('');
   const [captionHint, setCaptionHint] = React.useState('');
   const [caption, setCaption] = React.useState('');
+  const [includeAffiliate, setIncludeAffiliate] = React.useState(true);
   const [generating, setGenerating] = React.useState(false);
   const [accounts, setAccounts] = React.useState<ReplizAccount[] | null>(null);
   const [accountsLoading, setAccountsLoading] = React.useState(false);
@@ -75,6 +76,7 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
     setAffiliateUrl(product.affiliate_url || product.url || '');
     setCaptionHint('');
     setCaption('');
+    setIncludeAffiliate(true);
     setSelectedAccountIds([]);
     const future = new Date(Date.now() + 60 * 60 * 1000);
     setScheduleAt(toLocalInputValue(future));
@@ -143,7 +145,12 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
       const data = await fetchJson<{ caption: string }>('/api/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product, affiliateUrl, hint: captionHint }),
+        body: JSON.stringify({
+          product,
+          affiliateUrl,
+          hint: captionHint,
+          includeAffiliate,
+        }),
       });
       setCaption(data.caption);
       toast.success('Caption dibuat');
@@ -370,9 +377,25 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
           />
 
           <section>
-            <h3 className="mb-2 text-sm font-semibold">Caption</h3>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Caption</h3>
+              <label className="flex items-center gap-2 text-xs text-neutral-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeAffiliate}
+                  onChange={(e) => setIncludeAffiliate(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span>
+                  Sertakan link affiliate
+                  <span className="ml-1 text-neutral-400">
+                    {includeAffiliate ? '(ON)' : '(OFF)'}
+                  </span>
+                </span>
+              </label>
+            </div>
             <Textarea
-              placeholder="beli disini: [link affiliate]"
+              placeholder={includeAffiliate ? 'mis. "Beli disini: [link]" atau format khusus' : 'mis. "fokus ke fitur produk, jangan ajak klik link"'}
               value={captionHint}
               onChange={(e) => setCaptionHint(e.target.value)}
               rows={2}

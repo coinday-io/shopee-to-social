@@ -4,12 +4,13 @@ interface CaptionInput {
   product: ShopeeProduct;
   affiliateUrl: string;
   hint: string;
+  includeAffiliate: boolean;
   provider: AiProvider;
   apiKey: string;
   model?: string;
 }
 
-const CAPTION_SYSTEM_PROMPT = `Kamu adalah copywriter media sosial ahli untuk pasar Indonesia.
+const BASE_RULES = `Kamu adalah copywriter media sosial ahli untuk pasar Indonesia.
 Tugasmu: buat SATU caption produk yang singkat, engaging, dan mendorong pembelian.
 
 ATURAN OUTPUT (penting):
@@ -23,16 +24,26 @@ GAYA:
 - 2-4 emoji relevan.
 - Maksimal ~280 karakter sebelum hashtag.
 - Sebutkan harga kalau relevan.
-- Akhiri dengan 5-10 hashtag relevan di baris terakhir (dipisah spasi).
-- Sertakan link affiliate dalam caption (kalau hint dari user tidak memberi format khusus, taruh sebelum hashtag).`;
+- Akhiri dengan 5-10 hashtag relevan di baris terakhir (dipisah spasi).`;
+
+const RULE_WITH_LINK = `\n- WAJIB sertakan link affiliate dalam caption. Format default: "Beli disini: <link>" di baris sendiri sebelum hashtag, kecuali user memberi format spesifik di instruksi tambahan.`;
+const RULE_WITHOUT_LINK = `\n- JANGAN sertakan URL atau link apapun dalam caption. Jangan tulis "Beli disini" atau ajakan klik link.`;
+
+function buildSystemPrompt(includeAffiliate: boolean): string {
+  return BASE_RULES + (includeAffiliate ? RULE_WITH_LINK : RULE_WITHOUT_LINK);
+}
 
 function buildUserPrompt(input: CaptionInput): string {
-  const { product, affiliateUrl, hint } = input;
+  const { product, affiliateUrl, hint, includeAffiliate } = input;
   const price = new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(product.price);
+
+  const linkLine = includeAffiliate
+    ? `Link affiliate yang harus disertakan: ${affiliateUrl || product.url}`
+    : `(Link tidak perlu disertakan dalam caption.)`;
 
   return `Data produk:
 Nama: ${product.name}
@@ -40,19 +51,19 @@ Harga: ${price}
 Kategori: ${product.categories?.join(' > ') ?? '-'}
 Toko: ${product.shop_name} (${product.shop_location})
 Deskripsi singkat: ${(product.description ?? '').substring(0, 300)}
-Link affiliate: ${affiliateUrl || product.url}
+${linkLine}
 
 ${hint ? `Instruksi tambahan dari user: ${hint}` : ''}`;
 }
 
-async function generateWithOpenAI(prompt: string, apiKey: string, model = 'gpt-4o-mini') {
+async function generateWithOpenAI(systemPrompt: string, prompt: string, apiKey: string, model = 'gpt-4o-mini') {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: CAPTION_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       max_tokens: 500,
@@ -64,7 +75,7 @@ async function generateWithOpenAI(prompt: string, apiKey: string, model = 'gpt-4
   return (data.choices?.[0]?.message?.content ?? '').trim();
 }
 
-async function generateWithOpenRouter(prompt: string, apiKey: string, model = 'openai/gpt-4o-mini') {
+async function generateWithOpenRouter(systemPrompt: string, prompt: string, apiKey: string, model = 'openai/gpt-4o-mini') {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -75,7 +86,7 @@ async function generateWithOpenRouter(prompt: string, apiKey: string, model = 'o
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: CAPTION_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       max_tokens: 500,
@@ -87,7 +98,7 @@ async function generateWithOpenRouter(prompt: string, apiKey: string, model = 'o
   return (data.choices?.[0]?.message?.content ?? '').trim();
 }
 
-async function generateWithClaude(prompt: string, apiKey: string, model = 'claude-haiku-4-5-20251001') {
+async function generateWithClaude(systemPrompt: string, prompt: string, apiKey: string, model = 'claude-haiku-4-5-20251001') {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -98,7 +109,7 @@ async function generateWithClaude(prompt: string, apiKey: string, model = 'claud
     body: JSON.stringify({
       model,
       max_tokens: 500,
-      system: CAPTION_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -130,17 +141,18 @@ function sanitizeCaption(raw: string): string {
 }
 
 export async function generateCaption(input: CaptionInput): Promise<string> {
+  const systemPrompt = buildSystemPrompt(input.includeAffiliate);
   const prompt = buildUserPrompt(input);
   let raw: string;
   switch (input.provider) {
     case 'openai':
-      raw = await generateWithOpenAI(prompt, input.apiKey, input.model);
+      raw = await generateWithOpenAI(systemPrompt, prompt, input.apiKey, input.model);
       break;
     case 'openrouter':
-      raw = await generateWithOpenRouter(prompt, input.apiKey, input.model);
+      raw = await generateWithOpenRouter(systemPrompt, prompt, input.apiKey, input.model);
       break;
     case 'claude':
-      raw = await generateWithClaude(prompt, input.apiKey, input.model);
+      raw = await generateWithClaude(systemPrompt, prompt, input.apiKey, input.model);
       break;
     default:
       throw new Error(`Unknown AI provider: ${input.provider}`);

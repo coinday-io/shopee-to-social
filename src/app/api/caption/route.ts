@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export const POST = jsonHandler(async (req: Request) => {
-  const { product, affiliateUrl, hint } = await req.json();
+  const { product, affiliateUrl, hint, includeAffiliate } = await req.json();
 
   if (!product) {
     return NextResponse.json({ error: 'Product data missing' }, { status: 400 });
@@ -38,6 +38,7 @@ export const POST = jsonHandler(async (req: Request) => {
     product,
     affiliateUrl: affiliateUrl ?? '',
     hint: hint ?? '',
+    includeAffiliate: includeAffiliate !== false, // default true
     provider,
     apiKey,
     model: settings.defaultAiModel ?? undefined,

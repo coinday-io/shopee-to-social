@@ -9,15 +9,23 @@ import { formatRupiah, truncate } from '@/lib/utils';
 interface ProductCardProps {
   product: ShopeeProduct;
   alreadyPosted?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (product: ShopeeProduct) => void;
   onCreatePost: (product: ShopeeProduct) => void;
 }
 
-export function ProductCard({ product, alreadyPosted, onCreatePost }: ProductCardProps) {
+export function ProductCard({
+  product,
+  alreadyPosted,
+  selected,
+  onToggleSelect,
+  onCreatePost,
+}: ProductCardProps) {
   const [imgError, setImgError] = React.useState(false);
   const img = product.images?.[0];
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-xl border border-border bg-white transition-shadow hover:shadow-md">
+    <div className={`group flex flex-col overflow-hidden rounded-xl border bg-white transition-all hover:shadow-md ${selected ? 'border-primary ring-2 ring-primary/30' : 'border-border'}`}>
       <div className="relative aspect-square overflow-hidden bg-neutral-100">
         {img && !imgError ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -41,6 +49,25 @@ export function ProductCard({ product, alreadyPosted, onCreatePost }: ProductCar
           {alreadyPosted && <Badge tone="success">Sudah dipost</Badge>}
           {product.affiliate_url && <Badge tone="primary">🔗 Affiliate</Badge>}
         </div>
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(product);
+            }}
+            aria-label={selected ? 'Deselect' : 'Select'}
+            className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border-2 transition-all ${
+              selected
+                ? 'bg-primary border-primary text-white'
+                : 'bg-white/90 border-white/90 text-transparent hover:text-neutral-400 hover:border-neutral-300'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+        )}
         {product.categories?.[0] && (
           <div className="absolute bottom-2 left-2">
             <Badge tone="neutral" className="bg-white/90 backdrop-blur">

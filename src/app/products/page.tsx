@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header';
 import { JsonUploader } from '@/components/products/JsonUploader';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { PostFormModal } from '@/components/products/PostFormModal';
+import { BulkPostModal } from '@/components/products/BulkPostModal';
 import { Button } from '@/components/ui/Button';
 import { ShopeeJsonFile, ShopeeProduct } from '@/lib/types';
 
@@ -15,8 +16,9 @@ export default function ProductsPage() {
   const [file, setFile] = React.useState<ShopeeJsonFile | null>(null);
   const [selected, setSelected] = React.useState<ShopeeProduct | null>(null);
   const [posted, setPosted] = React.useState<Set<string>>(new Set());
+  const [pickedIds, setPickedIds] = React.useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = React.useState(false);
 
-  // Restore from localStorage on mount
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -30,6 +32,7 @@ export default function ProductsPage() {
 
   function handleLoaded(parsed: ShopeeJsonFile) {
     setFile(parsed);
+    setPickedIds(new Set());
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     } catch {
@@ -39,6 +42,7 @@ export default function ProductsPage() {
 
   function clearProducts() {
     setFile(null);
+    setPickedIds(new Set());
     localStorage.removeItem(STORAGE_KEY);
   }
 
@@ -55,13 +59,41 @@ export default function ProductsPage() {
     });
   }
 
+  function markManyPosted(itemIds: string[]) {
+    setPosted((prev) => {
+      const next = new Set(prev);
+      itemIds.forEach((id) => next.add(id));
+      try {
+        localStorage.setItem(POSTED_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
+
+  function toggleSelect(p: ShopeeProduct) {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      const id = String(p.itemid);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const pickedProducts = React.useMemo(
+    () => (file?.products ?? []).filter((p) => pickedIds.has(String(p.itemid))),
+    [file, pickedIds],
+  );
+
   return (
     <div>
       <Header
         title="Produk"
         subtitle="Upload hasil scrape Shopee dan jadwalkan posting"
       />
-      <div className="p-6 space-y-6">
+      <div className="p-6 pb-32 space-y-6">
         {!file ? (
           <JsonUploader onLoaded={handleLoaded} />
         ) : (
@@ -94,17 +126,50 @@ export default function ProductsPage() {
             <ProductGrid
               products={file.products}
               postedItemIds={posted}
+              selectedItemIds={pickedIds}
+              onToggleSelect={toggleSelect}
               onCreatePost={setSelected}
             />
           </>
         )}
       </div>
 
+      {/* Floating bulk action bar */}
+      {pickedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2">
+          <div className="flex items-center gap-3 rounded-full border border-border bg-white px-4 py-2 shadow-lg">
+            <span className="text-sm font-medium">
+              {pickedIds.size} produk dipilih
+            </span>
+            <button
+              onClick={() => setPickedIds(new Set())}
+              className="text-xs text-neutral-500 hover:text-neutral-800"
+            >
+              Clear
+            </button>
+            <Button size="sm" onClick={() => setBulkOpen(true)}>
+              Bulk Post →
+            </Button>
+          </div>
+        </div>
+      )}
+
       <PostFormModal
         open={!!selected}
         product={selected}
         onClose={() => setSelected(null)}
         onSuccess={markPosted}
+      />
+
+      <BulkPostModal
+        open={bulkOpen}
+        products={pickedProducts}
+        onClose={() => setBulkOpen(false)}
+        onSuccess={(itemIds) => {
+          markManyPosted(itemIds);
+          setPickedIds(new Set());
+          setBulkOpen(false);
+        }}
       />
     </div>
   );
