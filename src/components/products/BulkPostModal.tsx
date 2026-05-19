@@ -65,6 +65,7 @@ function toLocalInputValue(d: Date) {
 export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostModalProps) {
   const [items, setItems] = React.useState<ItemState[]>([]);
   const [mode, setMode] = React.useState<PostMode>('image');
+  const [albumImageCount, setAlbumImageCount] = React.useState(3);
   const [includeAffiliate, setIncludeAffiliate] = React.useState(true);
   const [captionHint, setCaptionHint] = React.useState('');
   const [accounts, setAccounts] = React.useState<ReplizAccount[] | null>(null);
@@ -84,6 +85,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
     setItems(products.map((p) => ({ product: p, caption: '', status: 'idle' })));
     setSelectedAccountIds([]);
     setMode('image');
+    setAlbumImageCount(3);
     setIncludeAffiliate(true);
     setCaptionHint('');
     setActiveTab('all');
@@ -218,7 +220,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
       // Per-mode media derivation
       const imageUrls =
         mode === 'album'
-          ? (product.images ?? []).slice(0, 10)
+          ? (product.images ?? []).slice(0, albumImageCount)
           : mode === 'image' || mode === 'story'
             ? product.images?.[0]
               ? [product.images[0]]
@@ -294,39 +296,44 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
               Mode Posting <span className="text-primary">→ {mode}</span>
             </h3>
             <div className="grid grid-cols-4 gap-1.5">
-              {MODE_OPTIONS.map((opt) => {
-                // Count compatible products for this mode
-                const compatibleCount = items.filter(
-                  (it) => isCompatibleWithMode(it.product, opt.value).ok,
-                ).length;
-                const allCompatible = compatibleCount === items.length;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setMode(opt.value)}
-                    className={cn(
-                      'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
-                      mode === opt.value
-                        ? 'border-primary bg-primary-50'
-                        : 'border-border bg-white hover:bg-neutral-50',
-                    )}
-                  >
-                    <div>{opt.label}</div>
-                    <div
-                      className={cn(
-                        'mt-0.5 text-[10px] font-normal',
-                        allCompatible ? 'text-neutral-400' : 'text-amber-700',
-                      )}
-                    >
-                      {compatibleCount}/{items.length} cocok
-                    </div>
-                  </button>
-                );
-              })}
+              {MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setMode(opt.value)}
+                  className={cn(
+                    'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
+                    mode === opt.value
+                      ? 'border-primary bg-primary-50'
+                      : 'border-border bg-white hover:bg-neutral-50',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+            {mode === 'album' && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-neutral-50 px-3 py-2">
+                <label className="text-xs font-medium text-neutral-700" htmlFor="album-count">
+                  Pakai
+                </label>
+                <input
+                  id="album-count"
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={albumImageCount}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isFinite(n)) setAlbumImageCount(Math.max(2, Math.min(10, n)));
+                  }}
+                  className="h-7 w-14 rounded border border-border bg-white px-2 text-center text-xs"
+                />
+                <span className="text-xs text-neutral-600">gambar pertama tiap produk (2-10)</span>
+              </div>
+            )}
             <p className="mt-1 text-xs text-neutral-500">
-              Mode yang sama dipakai untuk semua produk. Produk yang tidak cocok dengan mode akan di-skip otomatis (mis. produk tanpa video saat mode Video).
+              Mode yang sama dipakai untuk semua produk. Produk yang tidak cocok dengan mode akan di-skip otomatis.
             </p>
           </section>
 
