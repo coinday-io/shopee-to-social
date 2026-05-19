@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { fetchJson } from '@/lib/fetch-client';
 
 const navItems = [
   {
@@ -43,6 +45,19 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  // Don't render on the login page
+  if (pathname === '/login') return null;
+
+  async function logout() {
+    try {
+      await fetchJson('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Logout gagal');
+    }
+  }
+
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border bg-white">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-border">
@@ -74,8 +89,19 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-border px-4 py-3 text-xs text-neutral-500">
-        v0.1.0
+      <div className="border-t border-border px-3 py-3 space-y-2">
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-500">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          Logout
+        </button>
+        <div className="px-3 text-xs text-neutral-400">v0.1.0</div>
       </div>
     </aside>
   );
