@@ -26,7 +26,7 @@ function buildUserPrompt(input: CaptionInput): string {
     style: 'currency',
     currency: 'IDR',
     maximumFractionDigits: 0,
-  }).format(product.price / 100);
+  }).format(product.price);
 
   return `Data produk:
 Nama: ${product.name}

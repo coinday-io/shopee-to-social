@@ -37,11 +37,10 @@ export function ProductCard({ product, alreadyPosted, onCreatePost }: ProductCar
             </svg>
           </div>
         )}
-        {alreadyPosted && (
-          <div className="absolute left-2 top-2">
-            <Badge tone="success">Sudah dipost</Badge>
-          </div>
-        )}
+        <div className="absolute left-2 top-2 flex flex-col gap-1">
+          {alreadyPosted && <Badge tone="success">Sudah dipost</Badge>}
+          {product.affiliate_url && <Badge tone="primary">🔗 Affiliate</Badge>}
+        </div>
         {product.categories?.[0] && (
           <div className="absolute bottom-2 left-2">
             <Badge tone="neutral" className="bg-white/90 backdrop-blur">

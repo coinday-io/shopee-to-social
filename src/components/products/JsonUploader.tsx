@@ -4,6 +4,7 @@ import * as React from 'react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { ShopeeJsonFile } from '@/lib/types';
+import { csvToShopeeJsonFile } from '@/lib/csv';
 import { cn } from '@/lib/utils';
 
 interface JsonUploaderProps {
@@ -15,21 +16,35 @@ export function JsonUploader({ onLoaded }: JsonUploaderProps) {
   const [dragOver, setDragOver] = React.useState(false);
 
   async function handleFile(file: File) {
-    if (!file.name.endsWith('.json')) {
-      toast.error('File harus berformat .json');
+    const lowerName = file.name.toLowerCase();
+    const isJson = lowerName.endsWith('.json');
+    const isCsv = lowerName.endsWith('.csv');
+
+    if (!isJson && !isCsv) {
+      toast.error('Format harus .json atau .csv');
       return;
     }
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
-      if (!parsed || !Array.isArray(parsed.products)) {
-        toast.error('Format tidak valid: field "products" tidak ditemukan');
+      let parsed: ShopeeJsonFile;
+      if (isCsv) {
+        parsed = csvToShopeeJsonFile(text);
+      } else {
+        const json = JSON.parse(text);
+        if (!json || !Array.isArray(json.products)) {
+          toast.error('Format JSON tidak valid: field "products" tidak ditemukan');
+          return;
+        }
+        parsed = json as ShopeeJsonFile;
+      }
+      if (parsed.products.length === 0) {
+        toast.error('File tidak mengandung produk');
         return;
       }
-      onLoaded(parsed as ShopeeJsonFile);
-      toast.success(`${parsed.products.length} produk dimuat`);
+      onLoaded(parsed);
+      toast.success(`${parsed.products.length} produk dimuat dari ${isCsv ? 'CSV' : 'JSON'}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Gagal parse JSON');
+      toast.error(err instanceof Error ? err.message : 'Gagal parse file');
     }
   }
 
@@ -67,18 +82,19 @@ export function JsonUploader({ onLoaded }: JsonUploaderProps) {
         <line x1="12" y1="3" x2="12" y2="15" />
       </svg>
       <p className="text-sm font-medium text-neutral-800">
-        Drop file JSON hasil scrape Shopee di sini
+        Drop file <span className="text-primary">.json</span> atau{' '}
+        <span className="text-primary">.csv</span> hasil scrape Shopee di sini
       </p>
       <p className="mt-1 text-xs text-neutral-500">atau klik tombol di bawah</p>
       <div className="mt-4">
         <Button variant="secondary" onClick={() => inputRef.current?.click()}>
-          Pilih File JSON
+          Pilih File
         </Button>
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept="application/json,.json"
+        accept=".json,.csv,application/json,text/csv"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -86,6 +102,18 @@ export function JsonUploader({ onLoaded }: JsonUploaderProps) {
           e.target.value = '';
         }}
       />
+      <details className="mt-5 text-left text-xs text-neutral-500 max-w-md mx-auto">
+        <summary className="cursor-pointer text-center hover:text-neutral-700">
+          Format CSV yang diharapkan
+        </summary>
+        <p className="mt-2">
+          Header: <code>itemid,shopid,name,url,price,price_min,price_max,currency,stock,sold,rating,rating_count,shop_name,shop_location,brand,categories,description,image_count,images,video_count,videos,scraped_at,affiliate_url</code>
+        </p>
+        <p className="mt-1">
+          Multi-value: <code>images</code> &amp; <code>videos</code> dipisah <code>|</code>,
+          <code>categories</code> dipisah <code>&gt;</code>.
+        </p>
+      </details>
     </div>
   );
 }

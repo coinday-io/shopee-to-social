@@ -47,7 +47,8 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
   React.useEffect(() => {
     if (!product) return;
     setSelectedImageUrl(product.images?.[0] ?? '');
-    setAffiliateUrl(product.url ?? '');
+    // Prefer affiliate_url from scrape data, fallback to product URL
+    setAffiliateUrl(product.affiliate_url || product.url || '');
     setCaptionHint('');
     setCaption('');
     setSelectedAccountIds([]);
@@ -211,7 +212,11 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
             label="Affiliate URL"
             value={affiliateUrl}
             onChange={(e) => setAffiliateUrl(e.target.value)}
-            hint="Default: URL produk Shopee. Ganti ke link affiliate."
+            hint={
+              product.affiliate_url
+                ? 'Otomatis terisi dari affiliate_url di data scrape.'
+                : 'Default: URL produk Shopee. Ganti ke link affiliate.'
+            }
           />
 
           <section>

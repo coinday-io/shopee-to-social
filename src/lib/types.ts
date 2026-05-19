@@ -7,7 +7,7 @@ export interface ShopeeProduct {
   price_min: number;
   price_max: number;
   images: string[];
-  videos: { url: string; thumbnail: string; duration?: number }[];
+  videos: { url: string; thumbnail: string | null; duration?: number | null }[];
   url: string;
   categories: string[];
   brand: string | null;
@@ -16,12 +16,13 @@ export interface ShopeeProduct {
   rating: number;
   currency: string;
   scraped_at: string;
+  affiliate_url?: string | null;
 }
 
 export interface ShopeeJsonFile {
   scraped_at: string;
-  query: { type: string; keyword?: string };
-  success_count: number;
+  query?: { type?: string; keyword?: string; items?: unknown[] };
+  success_count?: number;
   products: ShopeeProduct[];
 }
 
