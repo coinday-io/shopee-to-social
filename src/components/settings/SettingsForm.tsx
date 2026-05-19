@@ -7,9 +7,16 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { Combobox, ComboboxOption } from '@/components/ui/Combobox';
 import { AppSettings, ReplizAccount } from '@/lib/types';
 import { platformLabel } from '@/lib/utils';
 import { fetchJson } from '@/lib/fetch-client';
+
+interface AiModel {
+  id: string;
+  name: string;
+  description?: string;
+}
 
 const defaultModelByProvider: Record<string, string> = {
   openai: 'gpt-4o-mini',
@@ -31,6 +38,9 @@ export function SettingsForm() {
   const [claudeKey, setClaudeKey] = React.useState('');
   const [provider, setProvider] = React.useState<'openai' | 'openrouter' | 'claude'>('openai');
   const [model, setModel] = React.useState('');
+  const [models, setModels] = React.useState<AiModel[]>([]);
+  const [modelsLoading, setModelsLoading] = React.useState(false);
+  const [modelsError, setModelsError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -51,6 +61,29 @@ export function SettingsForm() {
       }
     })();
   }, []);
+
+  const loadModels = React.useCallback(async (forProvider: typeof provider) => {
+    setModelsLoading(true);
+    setModelsError(null);
+    setModels([]);
+    try {
+      const data = await fetchJson<{ models: AiModel[] }>(
+        `/api/ai/models?provider=${forProvider}`,
+      );
+      setModels(data.models);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gagal load models';
+      setModelsError(msg);
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
+  // Reload model list when provider changes (after initial load)
+  React.useEffect(() => {
+    if (loading) return;
+    void loadModels(provider);
+  }, [provider, loading, loadModels]);
 
   async function saveAll() {
     setSaving(true);
@@ -202,13 +235,40 @@ export function SettingsForm() {
             <option value="openrouter">OpenRouter</option>
             <option value="claude">Anthropic Claude</option>
           </Select>
-          <Input
-            label="Default Model"
-            value={model}
-            placeholder={defaultModelByProvider[provider]}
-            onChange={(e) => setModel(e.target.value)}
-            hint={`Default: ${defaultModelByProvider[provider]}`}
-          />
+          <div className="md:col-span-2">
+            <Combobox
+              label={`Default Model (${models.length > 0 ? `${models.length} tersedia` : 'load list...'})`}
+              value={model}
+              onChange={setModel}
+              options={
+                models.map((m) => ({
+                  value: m.id,
+                  label: m.name,
+                  description: m.description,
+                })) as ComboboxOption[]
+              }
+              loading={modelsLoading}
+              placeholder={defaultModelByProvider[provider]}
+              hint={
+                modelsError
+                  ? `${modelsError} (kamu masih bisa ketik ID model manual)`
+                  : `Default jika kosong: ${defaultModelByProvider[provider]}. Bisa ketik untuk filter.`
+              }
+              emptyHint={
+                modelsError
+                  ? 'Belum bisa load list. Simpan API key dulu lalu refresh halaman.'
+                  : 'Tidak ada model cocok'
+              }
+            />
+            <button
+              type="button"
+              onClick={() => void loadModels(provider)}
+              disabled={modelsLoading}
+              className="mt-1 text-xs font-medium text-primary hover:underline disabled:text-neutral-400"
+            >
+              ↻ Refresh list
+            </button>
+          </div>
         </div>
       </section>
 
