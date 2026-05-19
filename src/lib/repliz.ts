@@ -1,4 +1,4 @@
-import { ReplizAccount, ReplizSchedulePayload } from './types';
+import { PostMode, ReplizAccount, ReplizMedia, ReplizSchedulePayload } from './types';
 
 export class ReplizClient {
   private baseUrl = 'https://api.repliz.com';
@@ -56,28 +56,79 @@ export class ReplizClient {
 // Repliz ScheduleMedia.type enum: 0 = image, 1 = video
 export const ReplizMediaType = { Image: 0, Video: 1 } as const;
 
-export function buildReplizPayload(
-  product: { name: string; description: string; url: string },
-  affiliateUrl: string,
-  imageUrl: string,
-  caption: string,
-  accountId: string,
-  scheduleAt: string,
-): ReplizSchedulePayload {
+export interface BuildPayloadInput {
+  product: { name: string; description: string; url: string };
+  affiliateUrl: string;
+  caption: string;
+  mode: PostMode;
+  /** URLs of selected images (for image, album, story) */
+  imageUrls?: string[];
+  /** URL of selected video (for video, reel) */
+  videoUrl?: string;
+  /** Optional video thumbnail (poster) */
+  videoThumbnail?: string;
+  accountId: string;
+  scheduleAt: string;
+}
+
+export function buildReplizPayload(input: BuildPayloadInput): ReplizSchedulePayload {
+  const {
+    product,
+    affiliateUrl,
+    caption,
+    mode,
+    imageUrls = [],
+    videoUrl,
+    videoThumbnail,
+    accountId,
+    scheduleAt,
+  } = input;
+
+  let medias: ReplizMedia[] = [];
+
+  if (mode === 'image' || mode === 'story') {
+    const url = imageUrls[0];
+    if (url) {
+      medias = [
+        {
+          alt: product.name,
+          type: ReplizMediaType.Image,
+          thumbnail: url,
+          url,
+          customThumbnail: false,
+        },
+      ];
+    }
+  } else if (mode === 'album') {
+    medias = imageUrls.map((url) => ({
+      alt: product.name,
+      type: ReplizMediaType.Image,
+      thumbnail: url,
+      url,
+      customThumbnail: false,
+    }));
+  } else if (mode === 'video' || mode === 'reel') {
+    if (videoUrl) {
+      const thumb = videoThumbnail || imageUrls[0] || '';
+      medias = [
+        {
+          alt: product.name,
+          type: ReplizMediaType.Video,
+          thumbnail: thumb,
+          url: videoUrl,
+          customThumbnail: !!videoThumbnail,
+        },
+      ];
+    }
+  }
+  // text and link → medias stays empty array
+
   return {
     title: product.name.substring(0, 100),
     description: caption,
     topic: 'Shopee Product',
-    type: 'image',
-    medias: [
-      {
-        alt: product.name,
-        type: ReplizMediaType.Image,
-        thumbnail: imageUrl,
-        url: imageUrl,
-        customThumbnail: false,
-      },
-    ],
+    type: mode,
+    medias,
     meta: {
       title: product.name,
       description: (product.description ?? '').substring(0, 200),

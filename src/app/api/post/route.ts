@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ReplizClient, buildReplizPayload } from '@/lib/repliz';
-import { ReplizAccount } from '@/lib/types';
+import { PostMode, ReplizAccount } from '@/lib/types';
 import { jsonHandler } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,10 @@ export const maxDuration = 60;
 type PostRequest = {
   product: { itemid: number; name: string; description: string; url: string };
   affiliateUrl: string;
-  imageUrl: string;
+  mode: PostMode;
+  imageUrls?: string[];
+  videoUrl?: string;
+  videoThumbnail?: string;
   caption: string;
   accountIds: string[];
   accounts: ReplizAccount[];
@@ -19,9 +22,20 @@ type PostRequest = {
 
 export const POST = jsonHandler(async (req: Request) => {
   const body = (await req.json()) as PostRequest;
-  const { product, affiliateUrl, imageUrl, caption, accountIds, accounts, scheduleAt } = body;
+  const {
+    product,
+    affiliateUrl,
+    mode,
+    imageUrls = [],
+    videoUrl,
+    videoThumbnail,
+    caption,
+    accountIds,
+    accounts,
+    scheduleAt,
+  } = body;
 
-  if (!product || !accountIds?.length || !scheduleAt) {
+  if (!product || !accountIds?.length || !scheduleAt || !mode) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -37,17 +51,24 @@ export const POST = jsonHandler(async (req: Request) => {
   type Result = { accountId: string; success: boolean; scheduleId?: string; error?: string };
   const results: Result[] = [];
 
+  // Choose representative image URL for history (first image, video thumbnail, or empty)
+  const historyImageUrl =
+    imageUrls[0] || videoThumbnail || '';
+
   await Promise.allSettled(
     accountIds.map(async (accountId) => {
       const accountInfo = accounts.find((a) => a.id === accountId);
-      const payload = buildReplizPayload(
+      const payload = buildReplizPayload({
         product,
-        affiliateUrl ?? '',
-        imageUrl,
+        affiliateUrl: affiliateUrl ?? '',
         caption,
+        mode,
+        imageUrls,
+        videoUrl,
+        videoThumbnail,
         accountId,
         scheduleAt,
-      );
+      });
 
       try {
         const res = await client.createSchedule(payload);
@@ -58,7 +79,7 @@ export const POST = jsonHandler(async (req: Request) => {
             productUrl: product.url,
             affiliateUrl: affiliateUrl ?? '',
             caption,
-            imageUrl,
+            imageUrl: historyImageUrl,
             platform: accountInfo?.type ?? 'unknown',
             accountId,
             accountName: accountInfo?.name ?? accountId,
@@ -77,7 +98,7 @@ export const POST = jsonHandler(async (req: Request) => {
             productUrl: product.url,
             affiliateUrl: affiliateUrl ?? '',
             caption,
-            imageUrl,
+            imageUrl: historyImageUrl,
             platform: accountInfo?.type ?? 'unknown',
             accountId,
             accountName: accountInfo?.name ?? accountId,

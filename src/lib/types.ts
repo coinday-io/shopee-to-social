@@ -54,18 +54,22 @@ export interface PostFormData {
   scheduleAt: string;
 }
 
+export type PostMode = 'image' | 'album' | 'video' | 'reel' | 'story' | 'text' | 'link';
+
+export interface ReplizMedia {
+  alt: string;
+  type: 0 | 1; // 0 = image, 1 = video
+  thumbnail: string;
+  url: string;
+  customThumbnail: boolean;
+}
+
 export interface ReplizSchedulePayload {
   title: string;
   description: string;
   topic: string;
-  type: 'image' | 'album' | 'text' | 'link';
-  medias: {
-    alt: string;
-    type: 0 | 1; // 0 = image, 1 = video
-    thumbnail: string;
-    url: string;
-    customThumbnail: boolean;
-  }[];
+  type: PostMode;
+  medias: ReplizMedia[];
   meta: { title: string; description: string; url: string };
   additionalInfo: {
     isAiGenerated: boolean;
