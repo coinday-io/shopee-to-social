@@ -97,7 +97,7 @@ export function ProductGrid({
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {filtered.map((p) => (
           <ProductCard
             key={p.itemid}

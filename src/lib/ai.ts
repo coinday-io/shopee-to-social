@@ -23,7 +23,7 @@ GAYA:
 - Bahasa Indonesia natural dan friendly.
 - 2-4 emoji relevan.
 - Maksimal ~280 karakter sebelum hashtag.
-- Sebutkan harga kalau relevan.
+- JANGAN PERNAH menyebutkan harga produk (no "Rp", no angka harga, no "murah Rp X", no "hanya Rp X"). Sebut value/manfaat tapi tidak harga.
 - Akhiri dengan 5-10 hashtag relevan di baris terakhir (dipisah spasi).`;
 
 const RULE_WITH_LINK = `\n- WAJIB sertakan link affiliate dalam caption. Format default: "Beli disini: <link>" di baris sendiri sebelum hashtag, kecuali user memberi format spesifik di instruksi tambahan.`;
@@ -35,11 +35,6 @@ function buildSystemPrompt(includeAffiliate: boolean): string {
 
 function buildUserPrompt(input: CaptionInput): string {
   const { product, affiliateUrl, hint, includeAffiliate } = input;
-  const price = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(product.price);
 
   const linkLine = includeAffiliate
     ? `Link affiliate yang harus disertakan: ${affiliateUrl || product.url}`
@@ -47,13 +42,14 @@ function buildUserPrompt(input: CaptionInput): string {
 
   return `Data produk:
 Nama: ${product.name}
-Harga: ${price}
 Kategori: ${product.categories?.join(' > ') ?? '-'}
 Toko: ${product.shop_name} (${product.shop_location})
 Deskripsi singkat: ${(product.description ?? '').substring(0, 300)}
 ${linkLine}
 
-${hint ? `Instruksi tambahan dari user: ${hint}` : ''}`;
+${hint ? `Instruksi tambahan dari user: ${hint}` : ''}
+
+INGAT: dilarang menyebutkan harga dalam caption.`;
 }
 
 async function generateWithOpenAI(systemPrompt: string, prompt: string, apiKey: string, model = 'gpt-4o-mini') {
@@ -135,6 +131,19 @@ function sanitizeCaption(raw: string): string {
     .join('\n');
   // Remove leading labels at start of caption
   text = text.replace(/^\s*(caption|hashtag|tags?|versi\s*\d+|untuk\s+\w+)\s*[:\-]\s*/i, '');
+
+  // Strip Rupiah price mentions ("Rp 52.500", "Rp52.500", "hanya Rp 5.500", "IDR 52,500", etc.)
+  // Common patterns from AI: "hanya Rp X", "cuma Rp X", "harga Rp X", or bare "Rp X"
+  const priceWord = /(?:hanya|cuma|harga|cuma\s+seharga|seharga|mulai(?:\s+dari)?|dengan\s+harga)\s+/i;
+  const priceValue = /(?:Rp\.?|IDR)\s*[\d.,]+(?:\s*(?:ribu|rb|juta|jt|k))?/gi;
+  // Remove price phrases with leading words ("hanya Rp 52.500!", optional trailing punctuation)
+  text = text.replace(new RegExp(`${priceWord.source}${priceValue.source}[.,!?]?`, 'gi'), '');
+  // Remove bare Rp/IDR mentions
+  text = text.replace(priceValue, '');
+  // Clean up resulting whitespace artifacts
+  text = text.replace(/\s{2,}/g, ' ');
+  text = text.replace(/\s+([.,!?])/g, '$1');
+
   // Collapse 3+ consecutive newlines down to 2
   text = text.replace(/\n{3,}/g, '\n\n');
   return text.trim();

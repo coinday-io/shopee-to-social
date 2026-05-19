@@ -27,8 +27,31 @@ interface ItemState {
   error?: string;
 }
 
+/**
+ * Whether the product can POTENTIALLY be posted in this mode based on its
+ * available media (video / images). Independent of the user's current
+ * per-item selection. Used to hide irrelevant products from the bulk list.
+ */
+function isProductCompatibleWithMode(p: ShopeeProduct, mode: PostMode): { ok: boolean; reason?: string } {
+  if (mode === 'video' || mode === 'reel') {
+    if ((p.videos?.length ?? 0) === 0) return { ok: false, reason: `Mode ${mode} butuh video` };
+  }
+  if (mode === 'album' && (p.images?.length ?? 0) < 2) {
+    return { ok: false, reason: 'Album butuh ≥2 gambar' };
+  }
+  if ((mode === 'image' || mode === 'story') && (p.images?.length ?? 0) === 0) {
+    return { ok: false, reason: 'Tidak ada gambar' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Submit-time validity check that also takes the user's per-item picks into
+ * account (e.g. album needs ≥2 selected images).
+ */
 function isItemCompatible(it: ItemState, mode: PostMode): { ok: boolean; reason?: string } {
-  const p = it.product;
+  const baseCheck = isProductCompatibleWithMode(it.product, mode);
+  if (!baseCheck.ok) return baseCheck;
   if (mode === 'album') {
     if (it.albumImages.length < 2) {
       return { ok: false, reason: `Album butuh ≥2 gambar (dipilih ${it.albumImages.length})` };
@@ -36,12 +59,6 @@ function isItemCompatible(it: ItemState, mode: PostMode): { ok: boolean; reason?
     if (it.albumImages.length > 10) {
       return { ok: false, reason: `Album maks 10 gambar (dipilih ${it.albumImages.length})` };
     }
-  }
-  if (mode === 'video' || mode === 'reel') {
-    if ((p.videos?.length ?? 0) === 0) return { ok: false, reason: `Mode ${mode} butuh video` };
-  }
-  if ((mode === 'image' || mode === 'story') && (p.images?.length ?? 0) === 0) {
-    return { ok: false, reason: 'Tidak ada gambar' };
   }
   return { ok: true };
 }
@@ -123,6 +140,12 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
 
   if (products.length === 0) return null;
 
+  // Items relevant for the current mode (structurally — does the product have
+  // the media this mode needs). Hidden products are excluded from the list,
+  // AI caption generation, and scheduling.
+  const visibleItems = items.filter((it) => isProductCompatibleWithMode(it.product, mode).ok);
+  const hiddenCount = items.length - visibleItems.length;
+
   const visibleAccounts = (accounts ?? []).filter((a) => {
     if (a.type === 'twitter') return false;
     if (activeTab === 'all') return true;
@@ -141,39 +164,44 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
   }
 
   async function generateAll() {
-    if (mode === 'text' || mode === 'link') {
-      // still allow generation
+    // Only generate captions for products that can actually be posted in the
+    // current mode — saves AI calls for products that would be skipped anyway.
+    const targets = items.filter((it) => isProductCompatibleWithMode(it.product, mode).ok);
+    if (targets.length === 0) {
+      return toast.error('Tidak ada produk yang cocok dengan mode ini');
     }
+
     setIsGenerating(true);
-    setGenProgress({ done: 0, total: items.length });
+    setGenProgress({ done: 0, total: targets.length });
     const next = [...items];
 
-    // Sequential to avoid hammering the AI provider
-    for (let i = 0; i < next.length; i++) {
-      next[i] = { ...next[i], status: 'generating' };
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const idx = next.findIndex((it) => it.product.itemid === target.product.itemid);
+      next[idx] = { ...next[idx], status: 'generating' };
       setItems([...next]);
       try {
         const data = await fetchJson<{ caption: string }>('/api/caption', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            product: next[i].product,
-            affiliateUrl: next[i].product.affiliate_url || next[i].product.url,
+            product: target.product,
+            affiliateUrl: target.product.affiliate_url || target.product.url,
             hint: captionHint,
             includeAffiliate,
           }),
         });
-        next[i] = { ...next[i], caption: data.caption, status: 'ready' };
+        next[idx] = { ...next[idx], caption: data.caption, status: 'ready' };
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error';
-        next[i] = { ...next[i], status: 'error', error: msg };
+        next[idx] = { ...next[idx], status: 'error', error: msg };
       }
       setItems([...next]);
-      setGenProgress({ done: i + 1, total: next.length });
+      setGenProgress({ done: i + 1, total: targets.length });
     }
     setIsGenerating(false);
     const okCount = next.filter((it) => it.status === 'ready').length;
-    toast.success(`${okCount}/${next.length} caption siap`);
+    toast.success(`${okCount}/${targets.length} caption siap`);
   }
 
   function updateCaption(itemId: string, value: string) {
@@ -216,11 +244,15 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
       return toast.error('Jadwal mulai tidak boleh di masa lalu');
     }
 
-    // Partition items: ready (has caption + compatible with mode) vs skipped
+    // Only consider items that are structurally compatible (i.e. shown in the
+    // list). Within those, partition into ready (caption + selection valid)
+    // vs skipped.
     const next = [...items];
     const toSchedule: ItemState[] = [];
     for (let i = 0; i < next.length; i++) {
       const it = next[i];
+      // Hidden products keep their existing status (idle) — do nothing.
+      if (!isProductCompatibleWithMode(it.product, mode).ok) continue;
       if (!it.caption.trim()) {
         next[i] = { ...it, status: 'skipped', error: 'Caption kosong' };
         continue;
@@ -460,7 +492,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
               )}
             </div>
             <div className="mt-1 text-xs text-neutral-500">
-              {selectedAccountIds.length} akun dipilih · total post yang akan dibuat: {selectedAccountIds.length * items.length}
+              {selectedAccountIds.length} akun dipilih · total post yang akan dibuat: {selectedAccountIds.length * visibleItems.length}
             </div>
           </section>
 
@@ -487,12 +519,12 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
                 <option value="1440">Tiap 1 hari</option>
               </Select>
             </div>
-            {items.length > 0 && (
+            {visibleItems.length > 0 && (
               <p className="mt-1 text-xs text-neutral-500">
                 Post pertama: {startAt ? new Date(startAt).toLocaleString('id-ID') : '-'} · Post terakhir:{' '}
                 {startAt
                   ? new Date(
-                      new Date(startAt).getTime() + (items.length - 1) * intervalMin * 60_000,
+                      new Date(startAt).getTime() + (visibleItems.length - 1) * intervalMin * 60_000,
                     ).toLocaleString('id-ID')
                   : '-'}
               </p>
@@ -503,10 +535,20 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
         {/* RIGHT — Items list */}
         <div>
           <h3 className="mb-2 text-sm font-semibold sticky top-0 bg-white">
-            Produk ({items.length})
+            Produk ({visibleItems.length}
+            {hiddenCount > 0 && (
+              <span className="ml-1 text-xs font-normal text-amber-700">
+                +{hiddenCount} disembunyikan
+              </span>
+            )})
           </h3>
+          {hiddenCount > 0 && (
+            <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {hiddenCount} produk tidak punya media yang dibutuhkan mode <strong>{mode}</strong> — tidak akan di-generate caption dan tidak akan diposting.
+            </div>
+          )}
           <div className="space-y-2">
-            {items.map((it, idx) => {
+            {visibleItems.map((it, idx) => {
               const scheduleAtMs = startAt
                 ? new Date(startAt).getTime() + idx * intervalMin * 60_000
                 : 0;
@@ -609,7 +651,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
         <div className="text-xs text-neutral-500">
           {isScheduling
             ? `Menjadwalkan ${scheduleProgress.done}/${scheduleProgress.total}...`
-            : `${items.filter((it) => it.caption.trim()).length}/${items.length} caption siap`}
+            : `${visibleItems.filter((it) => it.caption.trim()).length}/${visibleItems.length} caption siap`}
         </div>
         <div className="flex gap-2">
           <Button
