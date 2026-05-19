@@ -21,14 +21,21 @@ interface BulkPostModalProps {
 interface ItemState {
   product: ShopeeProduct;
   caption: string;
+  /** Images selected for album mode (ordered). Ignored for other modes. */
+  albumImages: string[];
   status: 'idle' | 'generating' | 'ready' | 'scheduling' | 'success' | 'error' | 'skipped';
   error?: string;
 }
 
-function isCompatibleWithMode(p: ShopeeProduct, mode: PostMode): { ok: boolean; reason?: string } {
+function isItemCompatible(it: ItemState, mode: PostMode): { ok: boolean; reason?: string } {
+  const p = it.product;
   if (mode === 'album') {
-    const count = p.images?.length ?? 0;
-    if (count < 2) return { ok: false, reason: `Album butuh ≥2 gambar (punya ${count})` };
+    if (it.albumImages.length < 2) {
+      return { ok: false, reason: `Album butuh ≥2 gambar (dipilih ${it.albumImages.length})` };
+    }
+    if (it.albumImages.length > 10) {
+      return { ok: false, reason: `Album maks 10 gambar (dipilih ${it.albumImages.length})` };
+    }
   }
   if (mode === 'video' || mode === 'reel') {
     if ((p.videos?.length ?? 0) === 0) return { ok: false, reason: `Mode ${mode} butuh video` };
@@ -65,7 +72,6 @@ function toLocalInputValue(d: Date) {
 export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostModalProps) {
   const [items, setItems] = React.useState<ItemState[]>([]);
   const [mode, setMode] = React.useState<PostMode>('image');
-  const [albumImageCount, setAlbumImageCount] = React.useState(3);
   const [includeAffiliate, setIncludeAffiliate] = React.useState(true);
   const [captionHint, setCaptionHint] = React.useState('');
   const [accounts, setAccounts] = React.useState<ReplizAccount[] | null>(null);
@@ -82,10 +88,17 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
   // Reset when products change or modal opens
   React.useEffect(() => {
     if (!open) return;
-    setItems(products.map((p) => ({ product: p, caption: '', status: 'idle' })));
+    setItems(
+      products.map((p) => ({
+        product: p,
+        caption: '',
+        // Default album selection: first 3 images (or fewer if product has less)
+        albumImages: (p.images ?? []).slice(0, 3),
+        status: 'idle',
+      })),
+    );
     setSelectedAccountIds([]);
     setMode('image');
-    setAlbumImageCount(3);
     setIncludeAffiliate(true);
     setCaptionHint('');
     setActiveTab('all');
@@ -173,6 +186,28 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
     );
   }
 
+  function toggleAlbumImage(itemId: string, url: string) {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (String(it.product.itemid) !== itemId) return it;
+        const exists = it.albumImages.includes(url);
+        if (exists) {
+          return { ...it, albumImages: it.albumImages.filter((u) => u !== url) };
+        }
+        if (it.albumImages.length >= 10) return it; // max 10
+        return { ...it, albumImages: [...it.albumImages, url] };
+      }),
+    );
+  }
+
+  function setAlbumImagesFor(itemId: string, urls: string[]) {
+    setItems((prev) =>
+      prev.map((it) =>
+        String(it.product.itemid) === itemId ? { ...it, albumImages: urls } : it,
+      ),
+    );
+  }
+
   async function scheduleAll() {
     if (selectedAccountIds.length === 0) return toast.error('Pilih minimal 1 akun');
     if (!startAt) return toast.error('Set jadwal mulai');
@@ -190,7 +225,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
         next[i] = { ...it, status: 'skipped', error: 'Caption kosong' };
         continue;
       }
-      const compat = isCompatibleWithMode(it.product, mode);
+      const compat = isItemCompatible(it, mode);
       if (!compat.ok) {
         next[i] = { ...it, status: 'skipped', error: compat.reason };
         continue;
@@ -220,7 +255,7 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
       // Per-mode media derivation
       const imageUrls =
         mode === 'album'
-          ? (product.images ?? []).slice(0, albumImageCount)
+          ? target.albumImages.slice(0, 10)
           : mode === 'image' || mode === 'story'
             ? product.images?.[0]
               ? [product.images[0]]
@@ -312,28 +347,9 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
                 </button>
               ))}
             </div>
-            {mode === 'album' && (
-              <div className="mt-2 flex items-center gap-2 rounded-lg bg-neutral-50 px-3 py-2">
-                <label className="text-xs font-medium text-neutral-700" htmlFor="album-count">
-                  Pakai
-                </label>
-                <input
-                  id="album-count"
-                  type="number"
-                  min={2}
-                  max={10}
-                  value={albumImageCount}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value, 10);
-                    if (Number.isFinite(n)) setAlbumImageCount(Math.max(2, Math.min(10, n)));
-                  }}
-                  className="h-7 w-14 rounded border border-border bg-white px-2 text-center text-xs"
-                />
-                <span className="text-xs text-neutral-600">gambar pertama tiap produk (2-10)</span>
-              </div>
-            )}
             <p className="mt-1 text-xs text-neutral-500">
               Mode yang sama dipakai untuk semua produk. Produk yang tidak cocok dengan mode akan di-skip otomatis.
+              {mode === 'album' && ' Pilih gambar yang mau dipakai untuk tiap produk di bawah.'}
             </p>
           </section>
 
@@ -532,6 +548,49 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
                       <StatusPill status={it.status} error={it.error} />
                     </div>
                   </div>
+
+                  {mode === 'album' && (
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center justify-between text-[10px] text-neutral-500">
+                        <span>
+                          Pilih gambar untuk album ({it.albumImages.length}/{Math.min(10, it.product.images?.length ?? 0)} dipilih, min 2)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setAlbumImagesFor(String(it.product.itemid), [])}
+                          className="text-primary hover:underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {(it.product.images ?? []).map((img) => {
+                          const selectedIdx = it.albumImages.indexOf(img);
+                          const isSelected = selectedIdx >= 0;
+                          return (
+                            <button
+                              key={img}
+                              type="button"
+                              onClick={() => toggleAlbumImage(String(it.product.itemid), img)}
+                              className={cn(
+                                'relative aspect-square overflow-hidden rounded border-2 transition-colors',
+                                isSelected ? 'border-primary' : 'border-transparent hover:border-neutral-300',
+                              )}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={img} alt="" className="h-full w-full object-cover" />
+                              {isSelected && (
+                                <div className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                                  {selectedIdx + 1}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <Textarea
                     rows={3}
                     value={it.caption}
