@@ -8,7 +8,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PostMode, ReplizAccount, ShopeeProduct, SocialPlatform } from '@/lib/types';
-import { cn, formatRupiah, platformColor, platformLabel, truncate } from '@/lib/utils';
+import { cn, formatRupiah, platformColor, platformLabel } from '@/lib/utils';
 import { fetchJson } from '@/lib/fetch-client';
 
 interface BulkPostModalProps {
@@ -21,8 +21,22 @@ interface BulkPostModalProps {
 interface ItemState {
   product: ShopeeProduct;
   caption: string;
-  status: 'idle' | 'generating' | 'ready' | 'scheduling' | 'success' | 'error';
+  status: 'idle' | 'generating' | 'ready' | 'scheduling' | 'success' | 'error' | 'skipped';
   error?: string;
+}
+
+function isCompatibleWithMode(p: ShopeeProduct, mode: PostMode): { ok: boolean; reason?: string } {
+  if (mode === 'album') {
+    const count = p.images?.length ?? 0;
+    if (count < 2) return { ok: false, reason: `Album butuh ≥2 gambar (punya ${count})` };
+  }
+  if (mode === 'video' || mode === 'reel') {
+    if ((p.videos?.length ?? 0) === 0) return { ok: false, reason: `Mode ${mode} butuh video` };
+  }
+  if ((mode === 'image' || mode === 'story') && (p.images?.length ?? 0) === 0) {
+    return { ok: false, reason: 'Tidak ada gambar' };
+  }
+  return { ok: true };
 }
 
 const PLATFORM_TABS: Array<'all' | SocialPlatform> = [
@@ -158,36 +172,42 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
   }
 
   async function scheduleAll() {
-    const readyItems = items.filter((it) => it.caption.trim());
-    if (readyItems.length === 0) return toast.error('Belum ada caption siap');
     if (selectedAccountIds.length === 0) return toast.error('Pilih minimal 1 akun');
     if (!startAt) return toast.error('Set jadwal mulai');
     const startDate = new Date(startAt);
     if (startDate.getTime() < Date.now() - 60_000) {
       return toast.error('Jadwal mulai tidak boleh di masa lalu');
     }
-    if (mode === 'album') {
-      for (const it of readyItems) {
-        if ((it.product.images?.length ?? 0) < 2) {
-          return toast.error(`Album butuh ≥2 gambar — produk "${truncate(it.product.name, 30)}" hanya punya ${it.product.images?.length ?? 0}`);
-        }
+
+    // Partition items: ready (has caption + compatible with mode) vs skipped
+    const next = [...items];
+    const toSchedule: ItemState[] = [];
+    for (let i = 0; i < next.length; i++) {
+      const it = next[i];
+      if (!it.caption.trim()) {
+        next[i] = { ...it, status: 'skipped', error: 'Caption kosong' };
+        continue;
       }
+      const compat = isCompatibleWithMode(it.product, mode);
+      if (!compat.ok) {
+        next[i] = { ...it, status: 'skipped', error: compat.reason };
+        continue;
+      }
+      toSchedule.push(it);
     }
-    if (mode === 'video' || mode === 'reel') {
-      for (const it of readyItems) {
-        if ((it.product.videos?.length ?? 0) === 0) {
-          return toast.error(`Mode ${mode} butuh video — produk "${truncate(it.product.name, 30)}" tidak punya video`);
-        }
-      }
+    setItems([...next]);
+
+    if (toSchedule.length === 0) {
+      toast.error('Tidak ada produk yang valid untuk mode ini');
+      return;
     }
 
     setIsScheduling(true);
-    setScheduleProgress({ done: 0, total: readyItems.length });
-    const next = [...items];
+    setScheduleProgress({ done: 0, total: toSchedule.length });
     const successIds: string[] = [];
 
-    for (let i = 0; i < readyItems.length; i++) {
-      const target = readyItems[i];
+    for (let i = 0; i < toSchedule.length; i++) {
+      const target = toSchedule[i];
       const idx = next.findIndex((it) => it.product.itemid === target.product.itemid);
       next[idx] = { ...next[idx], status: 'scheduling' };
       setItems([...next]);
@@ -240,16 +260,20 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
         next[idx] = { ...next[idx], status: 'error', error: msg };
       }
       setItems([...next]);
-      setScheduleProgress({ done: i + 1, total: readyItems.length });
+      setScheduleProgress({ done: i + 1, total: toSchedule.length });
     }
 
     setIsScheduling(false);
     const okCount = next.filter((it) => it.status === 'success').length;
     const failCount = next.filter((it) => it.status === 'error').length;
-    if (failCount === 0) {
+    const skipCount = next.filter((it) => it.status === 'skipped').length;
+    const parts = [`${okCount} berhasil`];
+    if (failCount > 0) parts.push(`${failCount} gagal`);
+    if (skipCount > 0) parts.push(`${skipCount} di-skip`);
+    if (failCount === 0 && skipCount === 0) {
       toast.success(`${okCount} post berhasil dijadwalkan`);
     } else {
-      toast(`${okCount} berhasil, ${failCount} gagal`, { icon: '⚠️' });
+      toast(parts.join(' · '), { icon: '⚠️' });
     }
     onSuccess(successIds);
   }
@@ -266,25 +290,43 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
         {/* LEFT — Configuration */}
         <div className="space-y-5">
           <section>
-            <h3 className="mb-2 text-sm font-semibold">Mode Posting</h3>
+            <h3 className="mb-2 text-sm font-semibold">
+              Mode Posting <span className="text-primary">→ {mode}</span>
+            </h3>
             <div className="grid grid-cols-4 gap-1.5">
-              {MODE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setMode(opt.value)}
-                  className={cn(
-                    'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
-                    mode === opt.value
-                      ? 'border-primary bg-primary-50'
-                      : 'border-border bg-white hover:bg-neutral-50',
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {MODE_OPTIONS.map((opt) => {
+                // Count compatible products for this mode
+                const compatibleCount = items.filter(
+                  (it) => isCompatibleWithMode(it.product, opt.value).ok,
+                ).length;
+                const allCompatible = compatibleCount === items.length;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setMode(opt.value)}
+                    className={cn(
+                      'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
+                      mode === opt.value
+                        ? 'border-primary bg-primary-50'
+                        : 'border-border bg-white hover:bg-neutral-50',
+                    )}
+                  >
+                    <div>{opt.label}</div>
+                    <div
+                      className={cn(
+                        'mt-0.5 text-[10px] font-normal',
+                        allCompatible ? 'text-neutral-400' : 'text-amber-700',
+                      )}
+                    >
+                      {compatibleCount}/{items.length} cocok
+                    </div>
+                  </button>
+                );
+              })}
             </div>
             <p className="mt-1 text-xs text-neutral-500">
-              Mode yang sama dipakai untuk semua produk. Album: pakai semua gambar. Video/Reel: gambar pertama produk + video pertama.
+              Mode yang sama dipakai untuk semua produk. Produk yang tidak cocok dengan mode akan di-skip otomatis (mis. produk tanpa video saat mode Video).
             </p>
           </section>
 
@@ -525,13 +567,14 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
 }
 
 function StatusPill({ status, error }: { status: ItemState['status']; error?: string }) {
-  const map = {
+  const map: Record<ItemState['status'], { tone: string; text: string }> = {
     idle: { tone: 'bg-neutral-100 text-neutral-600', text: 'Belum ada caption' },
     generating: { tone: 'bg-blue-100 text-blue-700', text: 'Generating...' },
     ready: { tone: 'bg-amber-100 text-amber-800', text: 'Ready' },
     scheduling: { tone: 'bg-amber-100 text-amber-800', text: 'Scheduling...' },
     success: { tone: 'bg-green-100 text-green-700', text: 'Terjadwal ✓' },
     error: { tone: 'bg-red-100 text-red-700', text: `Error: ${error ?? ''}` },
+    skipped: { tone: 'bg-neutral-200 text-neutral-700', text: `Skipped: ${error ?? ''}` },
   };
   const v = map[status];
   return (
