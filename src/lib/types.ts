@@ -58,7 +58,10 @@ export type PostMode = 'image' | 'album' | 'video' | 'reel' | 'story' | 'text' |
 
 export interface ReplizMedia {
   alt: string;
-  type: 0 | 1; // 0 = image, 1 = video
+  // Repliz spec is ambiguous: schema says number enum [0,1] but example
+  // and GET response use string "image" / "video". Strings work for both
+  // image and video so we standardise on strings.
+  type: 'image' | 'video';
   thumbnail: string;
   url: string;
   customThumbnail: boolean;

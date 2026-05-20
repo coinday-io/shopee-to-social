@@ -36,8 +36,20 @@ export class ReplizClient {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message ?? `Repliz createSchedule error: ${res.status}`);
+      // Try to extract the most useful error string from whatever shape
+      // Repliz returns. Fall back to status + raw text.
+      const text = await res.text().catch(() => '');
+      let parsed: { message?: string; error?: string; code?: number } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+      const msg =
+        parsed?.message ||
+        parsed?.error ||
+        (text ? text.slice(0, 300) : `Repliz ${res.status} ${res.statusText}`);
+      throw new Error(`Repliz ${res.status}: ${msg}`);
     }
     const data = await res.json();
     return { scheduleId: data.scheduleId ?? data.id ?? data._id ?? '' };
@@ -71,8 +83,9 @@ export class ReplizClient {
   }
 }
 
-// Repliz ScheduleMedia.type enum: 0 = image, 1 = video
-export const ReplizMediaType = { Image: 0, Video: 1 } as const;
+// Repliz ScheduleMedia.type: spec shows number enum [0,1] but example +
+// GET response use "image" / "video" strings. Strings work for both.
+export const ReplizMediaType = { Image: 'image', Video: 'video' } as const;
 
 export interface BuildPayloadInput {
   product: { name: string; description: string; url: string };

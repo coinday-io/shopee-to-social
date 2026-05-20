@@ -188,7 +188,11 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
 
     setSubmitting(true);
     try {
-      const data = await fetchJson<{ successCount: number; failCount: number }>('/api/post', {
+      const data = await fetchJson<{
+        successCount: number;
+        failCount: number;
+        results: { accountId: string; success: boolean; error?: string }[];
+      }>('/api/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,14 +213,26 @@ export function PostFormModal({ open, product, onClose, onSuccess }: PostFormMod
           scheduleAt: scheduleDate.toISOString(),
         }),
       });
-      const { successCount, failCount } = data;
+      const { successCount, failCount, results } = data;
       if (failCount === 0) {
         toast.success(`${successCount} jadwal berhasil dibuat`);
+        onSuccess(String(product.itemid));
+        onClose();
       } else {
-        toast(`${successCount} berhasil, ${failCount} gagal`, { icon: '⚠️' });
+        // Show actual error message from Repliz for each failed account
+        const failures = (results ?? []).filter((r) => !r.success);
+        for (const r of failures) {
+          const acct = accounts?.find((a) => a.id === r.accountId);
+          toast.error(`${acct?.name ?? r.accountId}: ${r.error ?? 'gagal'}`, {
+            duration: 10000,
+          });
+        }
+        if (successCount > 0) {
+          toast.success(`${successCount} akun berhasil dijadwalkan`);
+          onSuccess(String(product.itemid));
+          onClose();
+        }
       }
-      onSuccess(String(product.itemid));
-      onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Post gagal');
     } finally {
