@@ -8,6 +8,7 @@ import { fetchJson } from '@/lib/fetch-client';
 import { ScheduleEventCard } from './ScheduleEventCard';
 import { ScheduleCalendarHeader } from './ScheduleCalendarHeader';
 import { ScheduleDetailModal } from './ScheduleDetailModal';
+import { DayEventsModal } from './DayEventsModal';
 
 interface ScheduleResponse {
   docs: ReplizScheduleItem[];
@@ -56,6 +57,8 @@ export function ScheduleCalendar() {
   const [accountFilter, setAccountFilter] = React.useState<string[]>([]); // empty = all
   const [platformFilter, setPlatformFilter] = React.useState<'all' | SocialPlatform>('all');
   const [selected, setSelected] = React.useState<ReplizScheduleItem | null>(null);
+  const [dayModalDate, setDayModalDate] = React.useState<Date | null>(null);
+  const [dayModalItems, setDayModalItems] = React.useState<ReplizScheduleItem[]>([]);
 
   // Load accounts once
   React.useEffect(() => {
@@ -183,8 +186,8 @@ export function ScheduleCalendar() {
                   {hidden > 0 && (
                     <button
                       onClick={() => {
-                        // For now: open the first hidden one. Could be a "day view" later.
-                        setSelected(dayEvents[visibleCount]);
+                        setDayModalDate(date);
+                        setDayModalItems(dayEvents);
                       }}
                       className="rounded bg-neutral-100 px-2 py-1 text-left text-[11px] font-medium text-neutral-600 hover:bg-neutral-200"
                     >
@@ -203,6 +206,16 @@ export function ScheduleCalendar() {
           )}
         </div>
       </div>
+
+      <DayEventsModal
+        date={dayModalDate}
+        items={dayModalItems}
+        onClose={() => setDayModalDate(null)}
+        onSelectItem={(item) => {
+          setDayModalDate(null);
+          setSelected(item);
+        }}
+      />
 
       <ScheduleDetailModal
         item={selected}

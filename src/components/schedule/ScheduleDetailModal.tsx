@@ -30,7 +30,8 @@ export function ScheduleDetailModal({ item, onClose }: Props) {
   if (!item) return null;
 
   const scheduleDate = new Date(item.scheduleAt);
-  const replizUrl = `https://app.repliz.com/schedule/${item._id}`;
+  // Repliz tidak expose per-schedule URL, jadi arahkan ke schedule list saja
+  const replizUrl = 'https://repliz.com/user/schedule';
 
   // Determine which medias to render — repliz returns type as either number (0=image,1=video) or string
   const medias = item.medias ?? [];

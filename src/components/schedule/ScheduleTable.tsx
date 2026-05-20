@@ -201,7 +201,7 @@ export function ScheduleTable() {
                       <td className="px-3 py-3 whitespace-nowrap">
                         {item.replizScheduleId && (
                           <a
-                            href={`https://app.repliz.com/schedule/${item.replizScheduleId}`}
+                            href="https://repliz.com/user/schedule"
                             target="_blank"
                             rel="noreferrer"
                             className="text-xs font-medium text-primary hover:underline"

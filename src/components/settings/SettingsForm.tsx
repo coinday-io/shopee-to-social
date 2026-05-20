@@ -154,7 +154,7 @@ export function SettingsForm() {
         <p className="text-sm text-neutral-500 mb-4">
           Auth pakai HTTP Basic. Dapatkan Access Key + Secret Key dari{' '}
           <a
-            href="https://app.repliz.com/developer"
+            href="https://repliz.com/user/developer"
             target="_blank"
             rel="noreferrer"
             className="text-primary hover:underline"
