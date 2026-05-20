@@ -43,12 +43,30 @@ export class ReplizClient {
     return { scheduleId: data.scheduleId ?? data.id ?? data._id ?? '' };
   }
 
-  async getSchedules(page = 1, limit = 20) {
-    const res = await fetch(
-      `${this.baseUrl}/public/schedule?page=${page}&limit=${limit}`,
-      { headers: this.headers, cache: 'no-store' },
-    );
-    if (!res.ok) throw new Error(`Repliz getSchedules error: ${res.status}`);
+  async getSchedules(opts: {
+    page?: number;
+    limit?: number;
+    fromDate?: string | null;
+    toDate?: string | null;
+    accountIds?: string[];
+    status?: string | null;
+  } = {}) {
+    const params = new URLSearchParams();
+    params.set('page', String(opts.page ?? 1));
+    params.set('limit', String(opts.limit ?? 100));
+    if (opts.fromDate) params.set('fromDate', opts.fromDate);
+    if (opts.toDate) params.set('toDate', opts.toDate);
+    if (opts.status) params.set('status', opts.status);
+    for (const id of opts.accountIds ?? []) params.append('accountIds', id);
+
+    const res = await fetch(`${this.baseUrl}/public/schedule?${params}`, {
+      headers: this.headers,
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Repliz getSchedules ${res.status}: ${text || res.statusText}`);
+    }
     return res.json();
   }
 }

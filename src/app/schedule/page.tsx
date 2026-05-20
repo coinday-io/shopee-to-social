@@ -1,5 +1,5 @@
 import { Header } from '@/components/layout/Header';
-import { ScheduleTable } from '@/components/schedule/ScheduleTable';
+import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,10 +8,10 @@ export default function SchedulePage() {
     <div>
       <Header
         title="Jadwal"
-        subtitle="Riwayat dan status posting yang sudah dijadwalkan"
+        subtitle="Calendar view dari semua jadwal posting di Repliz"
       />
       <div className="p-6">
-        <ScheduleTable />
+        <ScheduleCalendar />
       </div>
     </div>
   );

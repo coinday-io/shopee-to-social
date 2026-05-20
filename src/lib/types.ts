@@ -84,6 +84,30 @@ export interface ReplizSchedulePayload {
 
 export type AiProvider = 'openai' | 'openrouter' | 'claude';
 
+export type ReplizScheduleStatus = 'pending' | 'process' | 'success' | 'error';
+
+export interface ReplizScheduleItem {
+  _id: string;
+  title: string;
+  description: string;
+  topic: string;
+  type: string; // image | album | video | reel | story | text | link
+  medias: { alt?: string; type?: string | number; thumbnail?: string; url?: string }[];
+  meta: { title?: string; description?: string; url?: string };
+  status: ReplizScheduleStatus;
+  scheduleAt: string;
+  accountId: string;
+  account?: {
+    _id: string;
+    name: string;
+    username: string;
+    picture: string;
+    type: SocialPlatform;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AppSettings {
   replizAccessKey: string | null;
   replizSecretKey: string | null;
