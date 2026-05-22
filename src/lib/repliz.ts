@@ -90,7 +90,9 @@ export class ReplizClient {
     if (opts.fromDate) params.set('fromDate', opts.fromDate);
     if (opts.toDate) params.set('toDate', opts.toDate);
     if (opts.status) params.set('status', opts.status);
-    for (const id of opts.accountIds ?? []) params.append('accountIds', id);
+    // Repliz expects array param via bracket syntax — without it a single value
+    // is parsed as a string and Repliz throws "accountIds.map is not a function".
+    for (const id of opts.accountIds ?? []) params.append('accountIds[]', id);
 
     const res = await fetch(`${this.baseUrl}/public/schedule?${params}`, {
       headers: this.headers,
