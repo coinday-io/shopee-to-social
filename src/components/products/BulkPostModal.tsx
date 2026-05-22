@@ -516,6 +516,8 @@ export function BulkPostModal({ open, products, onClose, onSuccess }: BulkPostMo
                 <option value="60">Tiap 1 jam</option>
                 <option value="120">Tiap 2 jam</option>
                 <option value="240">Tiap 4 jam</option>
+                <option value="360">Tiap 6 jam</option>
+                <option value="720">Tiap 12 jam</option>
                 <option value="1440">Tiap 1 hari</option>
               </Select>
             </div>
