@@ -220,6 +220,7 @@ export function ScheduleCalendar() {
       <ScheduleDetailModal
         item={selected}
         onClose={() => setSelected(null)}
+        onRetried={fetchSchedules}
       />
     </div>
   );

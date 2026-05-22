@@ -1,16 +1,19 @@
 'use client';
 
 import * as React from 'react';
+import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ReplizScheduleItem } from '@/lib/types';
 import { cn, platformColor, platformLabel } from '@/lib/utils';
+import { fetchJson } from '@/lib/fetch-client';
 import { StatusIcon } from './StatusIcon';
 
 interface Props {
   item: ReplizScheduleItem | null;
   onClose: () => void;
+  onRetried?: () => void;
 }
 
 function statusTone(status: string) {
@@ -26,12 +29,30 @@ function statusTone(status: string) {
   }
 }
 
-export function ScheduleDetailModal({ item, onClose }: Props) {
+export function ScheduleDetailModal({ item, onClose, onRetried }: Props) {
+  const [retrying, setRetrying] = React.useState(false);
+
   if (!item) return null;
 
   const scheduleDate = new Date(item.scheduleAt);
   // Repliz tidak expose per-schedule URL, jadi arahkan ke schedule list saja
   const replizUrl = 'https://repliz.com/user/schedule';
+  const canRetry = item.status === 'error';
+
+  async function retry() {
+    if (!item) return;
+    setRetrying(true);
+    try {
+      await fetchJson(`/api/repliz/schedule/${item._id}/retry`, { method: 'POST' });
+      toast.success('Retry diminta ke Repliz');
+      onRetried?.();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retry gagal');
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   // Determine which medias to render — repliz returns type as either number (0=image,1=video) or string
   const medias = item.medias ?? [];
@@ -152,6 +173,11 @@ export function ScheduleDetailModal({ item, onClose }: Props) {
           <Button variant="secondary" onClick={onClose}>
             Tutup
           </Button>
+          {canRetry && (
+            <Button variant="danger" onClick={retry} loading={retrying}>
+              ↻ Retry
+            </Button>
+          )}
           <a href={replizUrl} target="_blank" rel="noreferrer">
             <Button>Buka di Repliz →</Button>
           </a>

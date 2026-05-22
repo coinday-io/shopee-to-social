@@ -55,6 +55,27 @@ export class ReplizClient {
     return { scheduleId: data.scheduleId ?? data.id ?? data._id ?? '' };
   }
 
+  async retrySchedule(scheduleId: string): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/public/schedule/${scheduleId}/retry`, {
+      method: 'PUT',
+      headers: this.headers,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      let parsed: { message?: string; error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+      const msg =
+        parsed?.message ||
+        parsed?.error ||
+        (text ? text.slice(0, 300) : `Repliz ${res.status} ${res.statusText}`);
+      throw new Error(`Repliz retry ${res.status}: ${msg}`);
+    }
+  }
+
   async getSchedules(opts: {
     page?: number;
     limit?: number;
